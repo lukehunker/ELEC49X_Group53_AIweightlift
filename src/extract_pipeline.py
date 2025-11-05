@@ -20,7 +20,7 @@ face_mesh = mp_face.FaceMesh(static_image_mode=False,
 # Paths
 # --------------------------
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-VIDEO_PATH = os.path.join(BASE_DIR, "videos", "test1.mp4")
+VIDEO_PATH = os.path.join(BASE_DIR, "videos", "test2.mp4")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 OPENFACE_BIN = os.path.join(BASE_DIR, "OpenFace", "build", "bin", "FeatureExtraction")
