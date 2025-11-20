@@ -1,0 +1,10 @@
+Input:/home/lukehunker/ELEC49X_Group53_AIweightlift/lifting_videos/Augmented/Bench Press/Bench Press 26.mp4
+Input full path:/home/lukehunker/ELEC49X_Group53_AIweightlift/lifting_videos/Augmented/Bench Press/Bench Press 26.mp4
+Camera parameters:1313.54,1313.54,960,541
+Output csv:Bench Press 26.csv
+Gaze: 0
+AUs: 1
+Landmarks 2D: 1
+Landmarks 3D: 0
+Pose: 0
+Shape parameters: 0
