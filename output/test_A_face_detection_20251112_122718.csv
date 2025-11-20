@@ -1,0 +1,7 @@
+Video,Resolution,Quality,Frames,Detected,Rate (%),Avg Conf,Result
+eyebrows_dynamic,1920x1080,High (1080p+),963,963,100.00,0.980,✓ PASS
+neutral_still,1920x1080,High (1080p+),309,309,100.00,0.980,✓ PASS
+smiling_dynamic,1920x1080,High (1080p+),1160,1160,100.00,0.980,✓ PASS
+squinting_dynamic,1920x1080,High (1080p+),1073,1073,100.00,0.955,✓ PASS
+test1,1280x720,Medium (720p),223,223,100.00,0.980,✓ PASS
+test2,1280x720,Medium (720p),182,167,91.76,0.957,✗ FAIL
