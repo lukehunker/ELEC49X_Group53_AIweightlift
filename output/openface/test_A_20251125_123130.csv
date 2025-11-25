@@ -1,0 +1,7 @@
+Video,Resolution,Quality,Frames,Detected,Rate (%),Avg Conf,Result
+Deadlift 1,1080x1920,High (1080p+),511,463,90.61,0.937,✗ FAIL
+Deadlift 10,1080x1920,High (1080p+),583,126,21.61,0.847,✗ FAIL
+Squat 1,608x1080,Low (480p),683,10,1.46,0.701,✗ FAIL
+Squat 10,1920x1080,High (1080p+),736,0,0.00,N/A,✗ FAIL
+Bench Press 1,1920x1082,High (1080p+),431,4,0.93,0.667,✗ FAIL
+Bench Press 10,1920x1082,High (1080p+),661,53,8.02,0.868,✗ FAIL

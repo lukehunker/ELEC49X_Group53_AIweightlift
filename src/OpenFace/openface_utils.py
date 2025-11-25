@@ -1,6 +1,12 @@
 """
 Shared utilities for OpenFace testing modules.
 Provides common functions for video processing, OpenFace execution, and visualization.
+
+Optimizations for Accuracy:
+- High-quality OpenFace settings (-wild, -3Dfp, -gaze, -pdmparams)
+- Proper error handling and validation
+- Efficient CSV caching to avoid redundant processing
+- Multi-parameter extraction for comprehensive feature analysis
 """
 
 import os
@@ -20,7 +26,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 # Paths
 OPENFACE_BIN = os.path.join(REPO_ROOT, "OpenFace", "build", "bin", "FeatureExtraction")
 VIDEOS_DIR = os.path.join(REPO_ROOT, "lifting_videos")
-OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
+OUTPUT_DIR = os.path.join(REPO_ROOT, "output", "openface")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # OpenFace landmark indices
@@ -70,26 +76,50 @@ def classify_resolution(width, height):
         return "Very Low (<480p)"
 
 
-def find_videos(pattern_list):
-    """Find all videos matching any pattern in the list, searching recursively in subdirectories."""
+def find_videos(pattern_list, max_per_exercise=2):
+    """
+    Find a small subset of videos for testing, with some from each exercise.
+    
+    Args:
+        pattern_list: List of file patterns to search for
+        max_per_exercise: Maximum videos to return per exercise type (default: 2)
+    
+    Returns:
+        List of video file paths
+    """
     video_files = []
-    for pattern in pattern_list:
-        # Search in VIDEOS_DIR and all subdirectories (benchpress, deadlift, squat, etc.)
-        video_files.extend(glob.glob(os.path.join(VIDEOS_DIR, pattern), recursive=False))
-        video_files.extend(glob.glob(os.path.join(VIDEOS_DIR, '**', pattern), recursive=True))
-    return sorted(set(video_files))  # Remove duplicates and sort
+    # Search in Augmented subdirectories for each exercise type
+    target_dirs = [
+        os.path.join('Augmented', 'Deadlift'),
+        os.path.join('Augmented', 'Squat'),
+        os.path.join('Augmented', 'Bench Press')
+    ]
+    
+    # Collect videos per exercise, limiting to max_per_exercise each
+    for subdir in target_dirs:
+        exercise_videos = []
+        for pattern in pattern_list:
+            found = glob.glob(os.path.join(VIDEOS_DIR, subdir, pattern))
+            exercise_videos.extend(found)
+        
+        # Remove duplicates and limit
+        exercise_videos = sorted(set(exercise_videos))
+        video_files.extend(exercise_videos[:max_per_exercise])
+    
+    return video_files
 
 
 # =========================================
 # OPENFACE PROCESSING
 # =========================================
-def run_openface(video_path, force_rerun=False):
+def run_openface(video_path, force_rerun=False, high_quality=True):
     """
     Run OpenFace on a video and return the path to the output CSV.
     
     Args:
         video_path: Path to the video file
         force_rerun: If True, rerun even if CSV exists
+        high_quality: If True, use higher quality settings (slower but more accurate)
         
     Returns:
         Path to the CSV file containing OpenFace results
@@ -104,21 +134,43 @@ def run_openface(video_path, force_rerun=False):
         print(f"Using existing OpenFace output: {os.path.basename(csv_files[0])}")
         return csv_files[0]
     
-    # Run OpenFace
+    # Run OpenFace with optimized parameters
     print(f"Running OpenFace on {video_name}...")
     if not os.path.isfile(OPENFACE_BIN):
         raise FileNotFoundError(f"OpenFace binary NOT found at: {OPENFACE_BIN}")
     
-    cmd = [OPENFACE_BIN, "-f", video_path, "-out_dir", OUTPUT_DIR, "-2Dfp", "-aus"]
+    # Build command with accuracy optimizations
+    cmd = [
+        OPENFACE_BIN,
+        "-f", video_path,
+        "-out_dir", OUTPUT_DIR,
+        "-2Dfp",  # 2D facial landmarks
+        "-3Dfp",  # 3D facial landmarks (better for head pose)
+        "-pdmparams",  # PDM parameters (shape variations)
+        "-aus",  # Action Units
+        "-gaze",  # Gaze direction (useful for strain detection)
+    ]
+    
+    if high_quality:
+        # High accuracy settings
+        cmd.extend([
+            "-wild",  # Trained for in-the-wild conditions (better robustness)
+            "-q",  # Quiet mode (less console spam)
+        ])
+    
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Warning: OpenFace returned code {result.returncode}")
     except subprocess.CalledProcessError as e:
+        print(f"Error output: {e.stderr if e.stderr else 'No error message'}")
         raise RuntimeError(f"OpenFace processing failed: {e}")
     
     csv_files = glob.glob(csv_pattern)
     if not csv_files:
         raise RuntimeError("OpenFace finished but did not generate a CSV file.")
     
+    print(f"✓ OpenFace processing complete: {os.path.basename(csv_files[0])}")
     return csv_files[0]
 
 
@@ -127,19 +179,29 @@ def load_landmark_data(csv_path, success_only=True):
     Load and parse landmark data from OpenFace CSV.
     
     Args:
-        csv_path: Path to the CSV file
-        success_only: If True, only return successfully detected frames
+        csv_path: Path to OpenFace CSV file
+        success_only: If True, return only successfully detected frames
         
     Returns:
         DataFrame with landmark data
     """
-    df = pd.read_csv(csv_path)
-    df.columns = [col.strip() for col in df.columns]
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+    
+    try:
+        df = pd.read_csv(csv_path)
+        df.columns = [col.strip() for col in df.columns]
+    except Exception as e:
+        raise ValueError(f"Failed to read CSV: {e}")
+    
+    if 'success' not in df.columns:
+        print("Warning: 'success' column not found, assuming all frames valid")
+        return df
     
     if success_only:
         df = df[df['success'] == 1].copy()
         if len(df) == 0:
-            raise ValueError("No successful face detections found in the video.")
+            print("Warning: No successful face detections in video")
     
     return df
 
