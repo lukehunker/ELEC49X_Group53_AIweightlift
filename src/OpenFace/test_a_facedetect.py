@@ -198,15 +198,16 @@ def main():
     if not ofu.check_openface_binary():
         return
     
-    # Find videos
+    # Find videos - limit to 2 per exercise for faster testing
     video_files = ofu.find_videos(['*.mp4', '*.avi', '*.mov', '*.mkv',
-                                    '*.MP4', '*.AVI', '*.MOV', '*.MKV'])
+                                    '*.MP4', '*.AVI', '*.MOV', '*.MKV'], 
+                                   max_per_exercise=2)
     
     if not video_files:
         print(f"ERROR: No videos found in {ofu.VIDEOS_DIR}")
         return
     
-    print(f"{'-'*80}\nFound {len(video_files)} video(s):")
+    print(f"{'-'*80}\nFound {len(video_files)} test video(s) (2 per exercise):")
     for vf in video_files:
         print(f"  - {os.path.basename(vf)}")
     print(f"{'-'*80}")

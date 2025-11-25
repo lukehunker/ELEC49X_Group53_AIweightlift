@@ -360,24 +360,19 @@ def main():
     if not ofu.check_openface_binary():
         return
     
-    # Find test videos
-    stability_videos = ofu.find_videos(['*stability*.mp4', '*neutral*.mp4', '*still*.mp4'])
-    dynamic_videos = ofu.find_videos(['*dynamic*.mp4', '*expression*.mp4', '*exertion*.mp4'])
+    # Find test videos - use any available videos, limit to 2 per exercise
+    stability_videos = ofu.find_videos(['*.mp4', '*.avi', '*.mov'], max_per_exercise=1)
+    dynamic_videos = ofu.find_videos(['*.mp4', '*.avi', '*.mov'], max_per_exercise=1)
     
     print(f"{'-'*80}")
-    print(f"Stability videos ({len(stability_videos)}):")
-    for vf in stability_videos:
-        print(f"  - {os.path.basename(vf)}")
-    print(f"\nDynamic videos ({len(dynamic_videos)}):")
-    for vf in dynamic_videos:
+    print(f"Test videos ({len(stability_videos + dynamic_videos)} total, 1-2 per exercise):")
+    for vf in stability_videos + dynamic_videos:
         print(f"  - {os.path.basename(vf)}")
     print(f"{'-'*80}")
     
     if not stability_videos and not dynamic_videos:
         print(f"\nERROR: No test videos found!")
-        print(f"Add videos to {ofu.VIDEOS_DIR} with naming:")
-        print(f"  Stability: *stability*, *neutral*, *still*")
-        print(f"  Dynamic: *dynamic*, *expression*, *exertion*")
+        print(f"Add videos to {ofu.VIDEOS_DIR}")
         return
     
     if ENABLE_VIDEO_VISUALIZATION:

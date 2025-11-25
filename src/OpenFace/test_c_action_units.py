@@ -540,26 +540,23 @@ def main():
     if not ofu.check_openface_binary():
         return
     
-    # Find videos by type
-    resting_videos = ofu.find_videos(['*rest*.mp4', '*baseline*.mp4', '*neutral*.mp4'])
-    exertion_videos = ofu.find_videos(['*low*.mp4', '*medium*.mp4', '*high*.mp4', 
-                                       '*light*.mp4', '*moderate*.mp4', '*max*.mp4',
-                                       '*effort*.mp4', '*exertion*.mp4'])
+    # Find videos - use any available videos, limit to 2 per exercise
+    test_videos = ofu.find_videos(['*.mp4', '*.avi', '*.mov'], max_per_exercise=2)
+    
+    # Split into resting and exertion (treat first half as resting, second as exertion)
+    split = len(test_videos) // 2
+    resting_videos = test_videos[:split] if split > 0 else test_videos[:1]
+    exertion_videos = test_videos[split:] if split > 0 else test_videos
     
     print(f"{'-'*80}")
-    print(f"Resting videos ({len(resting_videos)}):")
-    for vf in resting_videos:
-        print(f"  - {os.path.basename(vf)}")
-    print(f"\nExertion videos ({len(exertion_videos)}):")
-    for vf in exertion_videos:
+    print(f"Test videos ({len(test_videos)} total, up to 2 per exercise):")
+    for vf in test_videos:
         print(f"  - {os.path.basename(vf)}")
     print(f"{'-'*80}")
     
-    if not resting_videos and not exertion_videos:
+    if not test_videos:
         print(f"\nERROR: No test videos found!")
-        print(f"Add videos to {ofu.VIDEOS_DIR} with naming:")
-        print(f"  Resting: *rest*, *baseline*, *neutral*")
-        print(f"  Exertion: *low*, *medium*, *high*, *effort* (optional: 3rep, 5rep, etc.)")
+        print(f"Add videos to {ofu.VIDEOS_DIR}")
         return
     
     if ENABLE_VIDEO_VISUALIZATION:
