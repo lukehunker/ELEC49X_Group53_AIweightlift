@@ -26,9 +26,6 @@ import openface_utils as ofu
 
 
 class OpenFaceExtractor:
-    """
-    Extract facial expression features from exercise videos for exertion prediction.
-    """
     
     # Key Action Units for physical exertion
     EXERTION_AUS = [
@@ -59,12 +56,7 @@ class OpenFaceExtractor:
     ]
     
     def __init__(self, verbose=True):
-        """
-        Initialize the OpenFace feature extractor.
-        
-        Args:
-            verbose: Print progress messages
-        """
+
         self.verbose = verbose
         self._check_openface()
     
