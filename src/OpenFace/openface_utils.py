@@ -15,6 +15,7 @@ import subprocess
 import pandas as pd
 import numpy as np
 import glob
+import random
 
 # =========================================
 # CONFIGURATION
@@ -76,35 +77,56 @@ def classify_resolution(width, height):
         return "Very Low (<480p)"
 
 
-def find_videos(pattern_list, max_per_exercise=2):
+def find_videos(pattern_list, max_per_exercise=2, randomize=True):
     """
-    Find a small subset of videos for testing, with some from each exercise.
+    Find a small subset of videos for testing.
+    Automatically detects if VIDEOS_DIR has subdirectory structure or is flat.
     
     Args:
-        pattern_list: List of file patterns to search for
+        pattern_list: List of file patterns to search for (e.g., ['*.mp4', '*.avi'])
         max_per_exercise: Maximum videos to return per exercise type (default: 2)
+        randomize: If True, randomly select videos instead of always using the first ones (default: True)
     
     Returns:
         List of video file paths
     """
     video_files = []
-    # Search in Augmented subdirectories for each exercise type
-    target_dirs = [
-        os.path.join('Augmented', 'Deadlift'),
-        os.path.join('Augmented', 'Squat'),
-        os.path.join('Augmented', 'Bench Press')
-    ]
     
-    # Collect videos per exercise, limiting to max_per_exercise each
-    for subdir in target_dirs:
-        exercise_videos = []
+    # Check if we have subdirectories (lifting_videos/Augmented structure)
+    subdirs = ['Augmented/Deadlift', 'Augmented/Squat', 'Augmented/Bench Press']
+    has_subdirs = any(os.path.exists(os.path.join(VIDEOS_DIR, subdir)) for subdir in subdirs)
+    
+    if has_subdirs:
+        # Use subdirectory structure (lifting_videos/Augmented/)
+        for subdir in subdirs:
+            exercise_videos = []
+            for pattern in pattern_list:
+                found = glob.glob(os.path.join(VIDEOS_DIR, subdir, pattern))
+                exercise_videos.extend(found)
+            
+            # Remove duplicates
+            exercise_videos = list(set(exercise_videos))
+            
+            # Randomize or sort
+            if randomize and len(exercise_videos) > max_per_exercise:
+                video_files.extend(random.sample(exercise_videos, max_per_exercise))
+            else:
+                exercise_videos = sorted(exercise_videos)
+                video_files.extend(exercise_videos[:max_per_exercise])
+    else:
+        # Flat structure (videos/ folder) - just grab files directly
         for pattern in pattern_list:
-            found = glob.glob(os.path.join(VIDEOS_DIR, subdir, pattern))
-            exercise_videos.extend(found)
+            found = glob.glob(os.path.join(VIDEOS_DIR, pattern))
+            video_files.extend(found)
         
-        # Remove duplicates and limit
-        exercise_videos = sorted(set(exercise_videos))
-        video_files.extend(exercise_videos[:max_per_exercise])
+        # Remove duplicates
+        video_files = list(set(video_files))
+        
+        # Randomize or sort, then limit
+        if randomize and len(video_files) > max_per_exercise * 3:
+            video_files = random.sample(video_files, max_per_exercise * 3)
+        else:
+            video_files = sorted(video_files)[:max_per_exercise * 3]
     
     return video_files
 
