@@ -239,7 +239,17 @@ def visualize_landmark_tracking(video_path, df, test_type='stability'):
         print(f"Skipping video visualization")
         return
     
+    try:
+        # Check if display is available
+        import os as _os
+        if not _os.environ.get('DISPLAY'):
+            print("⚠️  Visualization skipped: No display available (WSL2/headless)")
+            return
+    except:
+        pass
+    
     video_name = os.path.basename(video_path).split('.')[0]
+    print(f"Displaying: {video_name}")
     cap = cv2.VideoCapture(video_path)
     
     print(f"\n{'='*60}")
@@ -386,13 +396,21 @@ def main():
     for video_path in stability_videos:
         video_name = os.path.basename(video_path).split('.')[0]
         print(f"\n{'='*80}\nProcessing Stability: {video_name}\n{'='*80}")
+        print("Using MediaPipe pose-guided face isolation...")
         
         try:
-            csv_path = ofu.run_openface(video_path)
+            csv_path = ofu.run_openface(video_path, use_pose_guidance=True)
             df = ofu.load_landmark_data(csv_path, success_only=True)
+            
+            # Get processed video path (cropped if pose guidance used)
+            processed_video_path = video_path
+            pose_guided_path = os.path.join(ofu.OUTPUT_DIR, f"{video_name}_pose_guided.mp4")
+            if os.path.exists(pose_guided_path):
+                processed_video_path = pose_guided_path
+            
             results, stability_df = stability_test(df, video_name)
             plot_stability_heatmap(stability_df, video_name)
-            visualize_landmark_tracking(video_path, df, test_type='stability')
+            visualize_landmark_tracking(processed_video_path, df, test_type='stability')
             
             all_results.append({'type': 'stability', 'video': video_name, 'results': results})
         except Exception as e:
@@ -402,13 +420,21 @@ def main():
     for video_path in dynamic_videos:
         video_name = os.path.basename(video_path).split('.')[0]
         print(f"\n{'='*80}\nProcessing Dynamic: {video_name}\n{'='*80}")
+        print("Using MediaPipe pose-guided face isolation...")
         
         try:
-            csv_path = ofu.run_openface(video_path)
+            csv_path = ofu.run_openface(video_path, use_pose_guidance=True)
             df = ofu.load_landmark_data(csv_path, success_only=True)
+            
+            # Get processed video path (cropped if pose guidance used)
+            processed_video_path = video_path
+            pose_guided_path = os.path.join(ofu.OUTPUT_DIR, f"{video_name}_pose_guided.mp4")
+            if os.path.exists(pose_guided_path):
+                processed_video_path = pose_guided_path
+            
             results = dynamic_test(df, video_name)
             plot_dynamic_tracking(results, video_name)
-            visualize_landmark_tracking(video_path, df, test_type='dynamic')
+            visualize_landmark_tracking(processed_video_path, df, test_type='dynamic')
             
             all_results.append({'type': 'dynamic', 'video': video_name, 'results': results})
         except Exception as e:

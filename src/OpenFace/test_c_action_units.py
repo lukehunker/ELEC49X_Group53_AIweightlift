@@ -370,7 +370,17 @@ def visualize_au_video(video_path, df, top_aus=None):
         print(f"Skipping video visualization")
         return
     
+    try:
+        # Check if display is available
+        import os as _os
+        if not _os.environ.get('DISPLAY'):
+            print("⚠️  Visualization skipped: No display available (WSL2/headless)")
+            return
+    except:
+        pass
+    
     video_name = os.path.basename(video_path).split('.')[0]
+    print(f"Displaying: {video_name}")
     cap = cv2.VideoCapture(video_path)
     
     # Determine top AUs to display (most active)
@@ -572,15 +582,22 @@ def main():
         metadata = parse_video_metadata(video_name)
         
         print(f"\n{'='*80}\nProcessing Resting: {video_name}\n{'='*80}")
+        print("Using MediaPipe pose-guided face isolation...")
         
         try:
-            csv_path = ofu.run_openface(video_path)
+            csv_path = ofu.run_openface(video_path, use_pose_guidance=True)
             df = ofu.load_landmark_data(csv_path, success_only=True)
+            
+            # Get processed video path (cropped if pose guidance used)
+            processed_video_path = video_path
+            pose_guided_path = os.path.join(ofu.OUTPUT_DIR, f"{video_name}_pose_guided.mp4")
+            if os.path.exists(pose_guided_path):
+                processed_video_path = pose_guided_path
             
             baseline_results = test_resting_baseline(df, video_name)
             plot_au_timeseries(df, video_name)
             plot_au_heatmap(df, video_name)
-            visualize_au_video(video_path, df)
+            visualize_au_video(processed_video_path, df)
             
             all_results.append({
                 'video': video_name,
@@ -596,10 +613,17 @@ def main():
         metadata = parse_video_metadata(video_name)
         
         print(f"\n{'='*80}\nProcessing Exertion: {video_name}\n{'='*80}")
+        print("Using MediaPipe pose-guided face isolation...")
         
         try:
-            csv_path = ofu.run_openface(video_path)
+            csv_path = ofu.run_openface(video_path, use_pose_guidance=True)
             df = ofu.load_landmark_data(csv_path, success_only=True)
+            
+            # Get processed video path (cropped if pose guidance used)
+            processed_video_path = video_path
+            pose_guided_path = os.path.join(ofu.OUTPUT_DIR, f"{video_name}_pose_guided.mp4")
+            if os.path.exists(pose_guided_path):
+                processed_video_path = pose_guided_path
             
             exertion_results = test_exertion_response(df, video_name, metadata['effort'])
             consistency_results = test_repetition_consistency(df, video_name, metadata['num_reps'])
@@ -609,7 +633,7 @@ def main():
             
             # Get top responsive AUs for visualization
             top_aus = [au for au, _, _ in exertion_results['responsive_aus'][:5]] if exertion_results['responsive_aus'] else None
-            visualize_au_video(video_path, df, top_aus)
+            visualize_au_video(processed_video_path, df, top_aus)
             
             all_results.append({
                 'video': video_name,

@@ -13,11 +13,11 @@ import openface_utils as ofu
 
 # Test configuration
 DETECTION_THRESHOLD = 0.95
-ENABLE_VISUALIZATION = None  # None = ask user
+ENABLE_VISUALIZATION = None  # None = ask user, True/False to force
 PLAYBACK_DELAY_MS = 30
 
 
-def process_video(video_path):
+def process_video(video_path, use_pose_guidance=True):
     """Process video through OpenFace and calculate detection metrics."""
     video_name = os.path.basename(video_path).split('.')[0]
     print(f"\n{'='*60}\nProcessing: {video_name}\n{'='*60}")
@@ -31,10 +31,21 @@ def process_video(video_path):
     print(f"Resolution: {metadata['resolution']} ({ofu.classify_resolution(metadata['width'], metadata['height'])})")
     print(f"FPS: {metadata['fps']:.2f}, Total Frames: {metadata['total_frames']}")
     
-    # Run OpenFace
+    if use_pose_guidance:
+        print("Using MediaPipe pose-guided face isolation...")
+    
+    # Run OpenFace with pose guidance
     try:
-        csv_path = ofu.run_openface(video_path)
+        csv_path = ofu.run_openface(video_path, use_pose_guidance=use_pose_guidance)
         df = ofu.load_landmark_data(csv_path, success_only=False)
+        
+        # Get the actual video that was processed (cropped if pose guidance used)
+        processed_video_path = video_path
+        if use_pose_guidance:
+            # Check if pose-guided video was created
+            pose_guided_path = os.path.join(ofu.OUTPUT_DIR, f"{video_name}_pose_guided.mp4")
+            if os.path.exists(pose_guided_path):
+                processed_video_path = pose_guided_path
     except Exception as e:
         print(f"ERROR: {e}")
         return None
@@ -62,6 +73,7 @@ def process_video(video_path):
     return {
         'video_name': video_name,
         'video_path': video_path,
+        'processed_video_path': processed_video_path,  # The actual video that was analyzed
         **metadata,
         'quality_class': ofu.classify_resolution(metadata['width'], metadata['height']),
         'total_frames': total_frames,
@@ -78,11 +90,24 @@ def visualize_results(results):
     if not ENABLE_VISUALIZATION:
         return
     
+    try:
+        # Check if display is available
+        import os as _os
+        if not _os.environ.get('DISPLAY'):
+            print("⚠️  Visualization skipped: No display available (WSL2/headless)")
+            return
+    except:
+        pass
+    
     print(f"\n{'='*60}")
     print(f"VISUALIZATION - SPACE=Pause, 'q'=Quit, '+/-'=Speed")
     print(f"{'='*60}")
     
-    cap = cv2.VideoCapture(results['video_path'])
+    # Use the processed video (cropped if pose guidance was used)
+    video_to_show = results.get('processed_video_path', results['video_path'])
+    print(f"Displaying: {os.path.basename(video_to_show)}")
+    
+    cap = cv2.VideoCapture(video_to_show)
     frame_idx, paused, delay_ms = 0, False, PLAYBACK_DELAY_MS
     x_cols = [f'x_{i}' for i in range(68)]
     y_cols = [f'y_{i}' for i in range(68)]
@@ -192,7 +217,8 @@ def main():
     print(f"\n{'='*80}")
     print(f"TEST A: FACE DETECTION ACCURACY VALIDATION")
     print(f"{'='*80}")
-    print(f"Purpose: Verify ≥95% face detection across video qualities\n")
+    print(f"Purpose: Verify ≥95% face detection across video qualities")
+    print(f"Method: MediaPipe pose-guided face isolation → OpenFace\n")
     
     # Check OpenFace
     if not ofu.check_openface_binary():
@@ -214,10 +240,21 @@ def main():
     
     # Visualization prompt
     if ENABLE_VISUALIZATION is None:
-        choice = input(f"\nShow visualization? (y/N): ").strip().lower()
-        ENABLE_VISUALIZATION = (choice == 'y')
+        try:
+            import os as _os
+            if not _os.environ.get('DISPLAY'):
+                print("\n⚠️  Visualization disabled: No display available (WSL2/headless)")
+                ENABLE_VISUALIZATION = False
+            else:
+                choice = input(f"\nShow visualization? (y/N): ").strip().lower()
+                ENABLE_VISUALIZATION = (choice == 'y')
+        except:
+            ENABLE_VISUALIZATION = False
     
-    print(f"\n{'📹 Visualization enabled' if ENABLE_VISUALIZATION else '⚡ Metrics only'}")
+    if ENABLE_VISUALIZATION:
+        print("\n📹 Visualization enabled")
+    else:
+        print("\n⚡ Metrics only (no visualization)")
     
     # Process videos
     all_results = []
