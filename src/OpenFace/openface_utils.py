@@ -16,6 +16,14 @@ import pandas as pd
 import numpy as np
 import glob
 import random
+import sys
+
+# Import pose-guided face detection (optional - only if MMPose available)
+try:
+    from pose_guided_face_detection import PoseGuidedFaceDetector
+    POSE_GUIDANCE_AVAILABLE = True
+except ImportError:
+    POSE_GUIDANCE_AVAILABLE = False
 
 # =========================================
 # CONFIGURATION
@@ -134,7 +142,7 @@ def find_videos(pattern_list, max_per_exercise=2, randomize=True):
 # =========================================
 # OPENFACE PROCESSING
 # =========================================
-def run_openface(video_path, force_rerun=False, high_quality=True):
+def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guidance=False):
     """
     Run OpenFace on a video and return the path to the output CSV.
     
@@ -142,11 +150,24 @@ def run_openface(video_path, force_rerun=False, high_quality=True):
         video_path: Path to the video file
         force_rerun: If True, rerun even if CSV exists
         high_quality: If True, use higher quality settings (slower but more accurate)
+        use_pose_guidance: If True, use MMPose to crop video to main person's face first
+                          (helps with multi-person videos and background faces)
         
     Returns:
         Path to the CSV file containing OpenFace results
     """
-    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    # Apply pose guidance if requested
+    original_video_path = video_path
+    if use_pose_guidance and POSE_GUIDANCE_AVAILABLE:
+        print("Using pose-guided face detection (cropping to main person's face)...")
+        video_path = preprocess_video_with_pose_guidance(video_path)
+        if video_path is None:
+            print("Warning: Pose guidance failed, using original video")
+            video_path = original_video_path
+    elif use_pose_guidance and not POSE_GUIDANCE_AVAILABLE:
+        print("Warning: Pose guidance requested but MMPose not available, using original video")
+    
+    video_name = os.path.splitext(os.path.basename(original_video_path))[0]  # Use original name for CSV
     
     # Check if CSV already exists
     csv_pattern = os.path.join(OUTPUT_DIR, f"{video_name}*.csv")
@@ -316,3 +337,46 @@ def check_openface_binary():
         print(f"{'!'*80}\n")
         return False
     return True
+
+
+def preprocess_video_with_pose_guidance(video_path, cache_dir=None):
+    """
+    Preprocess video using pose-guided cropping to focus on main person's face.
+    
+    This solves the problem of OpenFace detecting background faces instead of
+    the exercising person by using MMPose body keypoints to locate the correct face.
+    
+    Args:
+        video_path: Path to input video
+        cache_dir: Directory to save cropped videos (default: OUTPUT_DIR)
+    
+    Returns:
+        Path to cropped video, or None if failed
+    """
+    if not POSE_GUIDANCE_AVAILABLE:
+        return None
+    
+    if cache_dir is None:
+        cache_dir = OUTPUT_DIR
+    
+    # Generate output path
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    output_path = os.path.join(cache_dir, f"{video_name}_pose_guided.mp4")
+    
+    # Check if already processed
+    if os.path.exists(output_path):
+        print(f"Using cached pose-guided video: {os.path.basename(output_path)}")
+        return output_path
+    
+    # Create cropped video
+    try:
+        detector = PoseGuidedFaceDetector(verbose=False)
+        result_path = detector.create_cropped_video(
+            video_path, 
+            output_path,
+            fallback_to_full=True  # Use full frame if pose detection fails
+        )
+        return result_path
+    except Exception as e:
+        print(f"Warning: Pose-guided preprocessing failed: {e}")
+        return None

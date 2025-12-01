@@ -55,9 +55,10 @@ class OpenFaceExtractor:
         'AU20_c', 'AU23_c', 'AU25_c', 'AU26_c', 'AU28_c', 'AU45_c'
     ]
     
-    def __init__(self, verbose=True):
+    def __init__(self, verbose=True, use_pose_guidance=True):
 
         self.verbose = verbose
+        self.use_pose_guidance = use_pose_guidance
         self._check_openface()
     
     def _check_openface(self):
@@ -100,8 +101,8 @@ class OpenFaceExtractor:
         
         self._log(f"Resolution: {metadata['resolution']}, FPS: {metadata['fps']:.1f}, Frames: {metadata['total_frames']}")
         
-        # Run OpenFace
-        csv_path = ofu.run_openface(video_path)
+        # Run OpenFace with pose guidance if enabled
+        csv_path = ofu.run_openface(video_path, use_pose_guidance=self.use_pose_guidance)
         df_all = ofu.load_landmark_data(csv_path, success_only=False)
         df = ofu.load_landmark_data(csv_path, success_only=True)
         
@@ -485,7 +486,7 @@ class OpenFaceExtractor:
 # CONVENIENCE FUNCTIONS
 # =========================================
 
-def extract_features(video_path, expected_reps=None, verbose=True):
+def extract_features(video_path, expected_reps=None, verbose=True, use_pose_guidance=True):
     """
     Quick function to extract features from a single video.
     
@@ -493,15 +494,16 @@ def extract_features(video_path, expected_reps=None, verbose=True):
         video_path: Path to video file
         expected_reps: Expected number of repetitions (optional)
         verbose: Print progress
+        use_pose_guidance: Use MediaPipe pose to focus on main person's face (default: True)
     
     Returns:
         dict: Feature dictionary
     """
-    extractor = OpenFaceExtractor(verbose=verbose)
+    extractor = OpenFaceExtractor(verbose=verbose, use_pose_guidance=use_pose_guidance)
     return extractor.extract_from_video(video_path, expected_reps=expected_reps)
 
 
-def extract_features_batch(video_dir, output_csv=None, expected_reps=None, verbose=True):
+def extract_features_batch(video_dir, output_csv=None, expected_reps=None, verbose=True, use_pose_guidance=True):
     """
     Quick function to extract features from all videos in a directory.
     
@@ -510,11 +512,12 @@ def extract_features_batch(video_dir, output_csv=None, expected_reps=None, verbo
         output_csv: Path to save CSV (optional)
         expected_reps: Expected reps (int or dict)
         verbose: Print progress
+        use_pose_guidance: Use MediaPipe pose to focus on main person's face (default: True)
     
     Returns:
         pd.DataFrame: Features for all videos
     """
-    extractor = OpenFaceExtractor(verbose=verbose)
+    extractor = OpenFaceExtractor(verbose=verbose, use_pose_guidance=use_pose_guidance)
     return extractor.extract_from_directory(video_dir, output_csv=output_csv, expected_reps=expected_reps)
 
 
