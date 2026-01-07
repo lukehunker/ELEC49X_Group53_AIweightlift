@@ -55,10 +55,23 @@ class OpenFaceExtractor:
         'AU20_c', 'AU23_c', 'AU25_c', 'AU26_c', 'AU28_c', 'AU45_c'
     ]
     
-    def __init__(self, verbose=True, use_pose_guidance=True):
-
+    def __init__(self, verbose=True, use_pose_guidance=True, sample_fps=10, load_minimal_columns=True, max_only=True):
+        """
+        Initialize OpenFace feature extractor.
+        
+        Args:
+            verbose: Print progress messages
+            use_pose_guidance: Use MediaPipe to crop to face (improves accuracy)
+            sample_fps: Target FPS for frame sampling (default: 10 = analyze 10 frames/sec)
+                       Set to None to use all frames (slower but more data)
+            load_minimal_columns: If True, only load columns needed for RPE (faster, less memory)
+            max_only: If True, focus on maximum AU values for peak RPE prediction (default: True)
+        """
         self.verbose = verbose
         self.use_pose_guidance = use_pose_guidance
+        self.sample_fps = sample_fps
+        self.load_minimal_columns = load_minimal_columns
+        self.max_only = max_only
         self._check_openface()
     
     def _check_openface(self):
@@ -103,8 +116,15 @@ class OpenFaceExtractor:
         
         # Run OpenFace with pose guidance if enabled
         csv_path = ofu.run_openface(video_path, use_pose_guidance=self.use_pose_guidance)
-        df_all = ofu.load_landmark_data(csv_path, success_only=False)
-        df = ofu.load_landmark_data(csv_path, success_only=True)
+        
+        # Load data with optimizations
+        columns_filter = 'rpe_minimal' if self.load_minimal_columns else None
+        df_all = ofu.load_landmark_data(csv_path, success_only=False, 
+                                       sample_fps=self.sample_fps,
+                                       columns_only=columns_filter)
+        df = ofu.load_landmark_data(csv_path, success_only=True,
+                                   sample_fps=self.sample_fps, 
+                                   columns_only=columns_filter)
         
         if len(df) < 10:
             raise ValueError(f"Insufficient valid frames ({len(df)} detected). Check video quality.")
@@ -169,53 +189,86 @@ class OpenFaceExtractor:
         }
     
     def _extract_au_features(self, df):
-        """Extract Action Unit statistical features."""
+        """Extract Action Unit features (max-focused for peak RPE prediction)."""
         features = {}
         
-        # For each exertion AU
-        for au in self.EXERTION_AUS:
-            if au not in df.columns:
-                continue
+        if self.max_only:
+            # MAX-ONLY MODE: Focus on peak AU intensities for max RPE prediction
+            # Only extract maximum values - the point of highest exertion
             
-            au_data = df[au].values
-            prefix = au.replace('_r', '')
+            for au in self.EXERTION_AUS:
+                if au not in df.columns:
+                    continue
+                
+                au_data = df[au].values
+                prefix = au.replace('_r', '')
+                
+                # Maximum intensity (primary feature for peak exertion)
+                features[f'{prefix}_max'] = np.max(au_data)
+                
+                # 95th percentile (captures sustained peak)
+                features[f'{prefix}_q95'] = np.percentile(au_data, 95)
+                
+                # Peak-to-baseline ratio (how much AU spiked)
+                baseline = np.percentile(au_data, 10)
+                peak = np.max(au_data)
+                features[f'{prefix}_peak_ratio'] = peak / baseline if baseline > 0.01 else peak
             
-            # Basic statistics
-            features[f'{prefix}_mean'] = np.mean(au_data)
-            features[f'{prefix}_std'] = np.std(au_data)
-            features[f'{prefix}_max'] = np.max(au_data)
-            features[f'{prefix}_min'] = np.min(au_data)
-            features[f'{prefix}_range'] = np.max(au_data) - np.min(au_data)
-            features[f'{prefix}_median'] = np.median(au_data)
+            # Overall maximum AU activity
+            all_au_data = df[self.EXERTION_AUS].values
+            features['au_overall_max'] = np.max(all_au_data)
             
-            # Percentiles
-            features[f'{prefix}_q25'] = np.percentile(au_data, 25)
-            features[f'{prefix}_q75'] = np.percentile(au_data, 75)
-            features[f'{prefix}_q90'] = np.percentile(au_data, 90)
+            # Count of AUs with high peak intensity (max > 2.0)
+            features['au_high_peak_count'] = sum([
+                1 for au in self.EXERTION_AUS 
+                if au in df.columns and df[au].max() > 2.0
+            ])
             
-            # Shape features
-            features[f'{prefix}_skew'] = skew(au_data)
-            features[f'{prefix}_kurtosis'] = kurtosis(au_data)
+        else:
+            # FULL STATISTICS MODE: Extract comprehensive features (legacy)
+            for au in self.EXERTION_AUS:
+                if au not in df.columns:
+                    continue
+                
+                au_data = df[au].values
+                prefix = au.replace('_r', '')
+                
+                # Basic statistics
+                features[f'{prefix}_mean'] = np.mean(au_data)
+                features[f'{prefix}_std'] = np.std(au_data)
+                features[f'{prefix}_max'] = np.max(au_data)
+                features[f'{prefix}_min'] = np.min(au_data)
+                features[f'{prefix}_range'] = np.max(au_data) - np.min(au_data)
+                features[f'{prefix}_median'] = np.median(au_data)
+                
+                # Percentiles
+                features[f'{prefix}_q25'] = np.percentile(au_data, 25)
+                features[f'{prefix}_q75'] = np.percentile(au_data, 75)
+                features[f'{prefix}_q90'] = np.percentile(au_data, 90)
+                
+                # Shape features
+                features[f'{prefix}_skew'] = skew(au_data)
+                features[f'{prefix}_kurtosis'] = kurtosis(au_data)
+                
+                # Activation ratio (% of time AU is active, >0.5 intensity)
+                features[f'{prefix}_activation_ratio'] = np.mean(au_data > 0.5)
+                
+                # Peak-to-baseline ratio
+                baseline = np.percentile(au_data, 10)
+                peak = np.percentile(au_data, 90)
+                features[f'{prefix}_peak_baseline_ratio'] = peak / baseline if baseline > 0.01 else 0
             
-            # Activation ratio (% of time AU is active, >0.5 intensity)
-            features[f'{prefix}_activation_ratio'] = np.mean(au_data > 0.5)
+            # Overall AU activity
+            all_au_data = df[self.EXERTION_AUS].values
+            features['au_overall_mean'] = np.mean(all_au_data)
+            features['au_overall_max'] = np.max(all_au_data)
+            features['au_overall_std'] = np.std(all_au_data)
             
-            # Peak-to-baseline ratio
-            baseline = np.percentile(au_data, 10)
-            peak = np.percentile(au_data, 90)
-            features[f'{prefix}_peak_baseline_ratio'] = peak / baseline if baseline > 0.01 else 0
-        
-        # Overall AU activity
-        all_au_data = df[self.EXERTION_AUS].values
-        features['au_overall_mean'] = np.mean(all_au_data)
-        features['au_overall_max'] = np.max(all_au_data)
-        features['au_overall_std'] = np.std(all_au_data)
-        
-        # Count of highly active AUs (mean > 1.0)
-        features['au_highly_active_count'] = sum([
-            1 for au in self.EXERTION_AUS 
-            if au in df.columns and df[au].mean() > 1.0
-        ])
+            # Count of highly active AUs (mean > 1.0)
+            features['au_highly_active_count'] = sum([
+                1 for au in self.EXERTION_AUS 
+                if au in df.columns and df[au].mean() > 1.0
+            ])
         
         return features
     

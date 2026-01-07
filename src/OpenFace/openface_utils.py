@@ -217,13 +217,16 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
     return csv_files[0]
 
 
-def load_landmark_data(csv_path, success_only=True):
+def load_landmark_data(csv_path, success_only=True, sample_fps=None, columns_only=None):
     """
-    Load and parse landmark data from OpenFace CSV.
+    Load and parse landmark data from OpenFace CSV with optimization options.
     
     Args:
         csv_path: Path to OpenFace CSV file
         success_only: If True, return only successfully detected frames
+        sample_fps: If provided, downsample to this FPS (e.g., 10 instead of 30)
+        columns_only: List of specific columns to load (None = all columns)
+                     Use 'rpe_minimal' for RPE prediction essentials only
         
     Returns:
         DataFrame with landmark data
@@ -231,8 +234,43 @@ def load_landmark_data(csv_path, success_only=True):
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
     
+    # Define minimal columns needed for RPE prediction
+    RPE_MINIMAL_COLUMNS = [
+        'frame', 'timestamp', 'success', 'confidence',
+        # Key exertion Action Units (intensity)
+        'AU04_r', 'AU06_r', 'AU07_r', 'AU09_r', 'AU10_r',
+        'AU12_r', 'AU17_r', 'AU20_r', 'AU25_r', 'AU26_r',
+        # Key landmarks for stability (just a few, not all 68x2=136)
+        'x_28', 'y_28',  # Nose tip
+        'x_36', 'y_36',  # Left eye corner
+        'x_45', 'y_45',  # Right eye corner
+        # Head pose (useful for movement analysis)
+        'pose_Rx', 'pose_Ry', 'pose_Rz',
+    ]
+    
+    # Determine which columns to load
+    if columns_only == 'rpe_minimal':
+        usecols = RPE_MINIMAL_COLUMNS
+    elif isinstance(columns_only, list):
+        usecols = columns_only
+    else:
+        usecols = None  # Load all columns
+    
     try:
-        df = pd.read_csv(csv_path)
+        # Load CSV with optional column filtering
+        if usecols:
+            # First read just header to check which columns exist
+            df_check = pd.read_csv(csv_path, nrows=0)
+            available_cols = [col.strip() for col in df_check.columns]
+            # Filter to only columns that actually exist
+            usecols_filtered = [col for col in usecols if col in available_cols]
+            if len(usecols_filtered) < len(usecols):
+                missing = set(usecols) - set(usecols_filtered)
+                print(f"Warning: {len(missing)} requested columns not found: {list(missing)[:5]}...")
+            df = pd.read_csv(csv_path, usecols=usecols_filtered if usecols_filtered else None)
+        else:
+            df = pd.read_csv(csv_path)
+        
         df.columns = [col.strip() for col in df.columns]
     except Exception as e:
         raise ValueError(f"Failed to read CSV: {e}")
@@ -245,6 +283,16 @@ def load_landmark_data(csv_path, success_only=True):
         df = df[df['success'] == 1].copy()
         if len(df) == 0:
             print("Warning: No successful face detections in video")
+            return df
+    
+    # Downsample frames if requested
+    if sample_fps is not None and 'timestamp' in df.columns and len(df) > 0:
+        original_fps = 1.0 / df['timestamp'].diff().median() if len(df) > 1 else 30
+        if original_fps > sample_fps:
+            # Keep every Nth frame
+            sample_interval = int(original_fps / sample_fps)
+            df = df.iloc[::sample_interval].reset_index(drop=True)
+            print(f"  Downsampled from ~{original_fps:.1f} FPS to ~{sample_fps} FPS ({len(df)} frames)")
     
     return df
 
