@@ -140,14 +140,10 @@ class OpenFaceExtractor:
         # 2. AU intensity features
         features.update(self._extract_au_features(df))
         
-        # 3. Repetition features
-        rep_features = self._extract_repetition_features(df, expected_reps)
-        features.update(rep_features)
-        
-        # 4. Landmark stability features
+        # 3. Landmark stability features
         features.update(self._extract_landmark_features(df))
         
-        # 5. Temporal dynamics
+        # 4. Temporal dynamics
         features.update(self._extract_temporal_features(df))
         
         # 6. Metadata
@@ -271,81 +267,6 @@ class OpenFaceExtractor:
             ])
         
         return features
-    
-    def _extract_repetition_features(self, df, expected_reps=None):
-        """Extract repetition-based features."""
-        features = {}
-        
-        # Use most responsive AU for rep detection
-        au_ranges = {au: df[au].max() - df[au].min() 
-                     for au in self.EXERTION_AUS if au in df.columns}
-        
-        if not au_ranges:
-            return {
-                'detected_reps': 0,
-                'rep_consistency': 0,
-                'rep_avg_intensity': 0,
-            }
-        
-        best_au = max(au_ranges.items(), key=lambda x: x[1])[0]
-        au_data = df[best_au].values
-        
-        # Detect peaks (repetitions)
-        peaks, smoothed = self._detect_peaks(au_data)
-        
-        features['detected_reps'] = len(peaks)
-        
-        if len(peaks) >= 2:
-            peak_values = au_data[peaks]
-            
-            # Repetition consistency
-            peak_mean = np.mean(peak_values)
-            peak_std = np.std(peak_values)
-            features['rep_consistency'] = 1 - (peak_std / peak_mean) if peak_mean > 0 else 0
-            features['rep_avg_intensity'] = peak_mean
-            features['rep_intensity_std'] = peak_std
-            features['rep_intensity_range'] = np.max(peak_values) - np.min(peak_values)
-            
-            # Rep timing (frames between peaks)
-            if len(peaks) > 1:
-                rep_intervals = np.diff(peaks)
-                features['rep_avg_interval'] = np.mean(rep_intervals)
-                features['rep_interval_std'] = np.std(rep_intervals)
-                features['rep_tempo_consistency'] = 1 - (np.std(rep_intervals) / np.mean(rep_intervals)) if np.mean(rep_intervals) > 0 else 0
-            else:
-                features['rep_avg_interval'] = 0
-                features['rep_interval_std'] = 0
-                features['rep_tempo_consistency'] = 0
-        else:
-            features['rep_consistency'] = 0
-            features['rep_avg_intensity'] = 0
-            features['rep_intensity_std'] = 0
-            features['rep_intensity_range'] = 0
-            features['rep_avg_interval'] = 0
-            features['rep_interval_std'] = 0
-            features['rep_tempo_consistency'] = 0
-        
-        # Rep detection accuracy (if expected reps provided)
-        if expected_reps:
-            features['rep_detection_accuracy'] = min(1.0, features['detected_reps'] / expected_reps)
-        else:
-            features['rep_detection_accuracy'] = 1.0  # Unknown, assume perfect
-        
-        return features
-    
-    def _detect_peaks(self, signal, min_distance=20):
-        """Detect peaks in AU signal for repetition counting."""
-        # Smooth signal
-        if len(signal) > 5:
-            window_len = min(11, len(signal) if len(signal) % 2 == 1 else len(signal) - 1)
-            smoothed = savgol_filter(signal, window_len, 3)
-        else:
-            smoothed = signal
-        
-        # Find peaks with prominence
-        peaks, _ = find_peaks(smoothed, distance=min_distance, prominence=0.3)
-        
-        return peaks, smoothed
     
     def _extract_landmark_features(self, df):
         """Extract facial landmark stability features."""

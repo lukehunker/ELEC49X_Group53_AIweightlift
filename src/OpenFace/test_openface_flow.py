@@ -108,9 +108,27 @@ def test_single_video(video_path, verbose=True):
         }
 
 
-def test_video_directory(video_dir, max_videos=None, pattern='*.mp4'):
+def test_video_directory(video_dir, max_videos=None, pattern='*.mp4', recursive=False):
     """Test OpenFace flow on multiple videos."""
-    video_files = sorted(glob.glob(os.path.join(video_dir, pattern)))
+    if recursive:
+        # Search recursively in subdirectories (for Augmented structure)
+        video_files = []
+        for root, dirs, files in os.walk(video_dir):
+            for file in files:
+                if file.endswith(('.mp4', '.mov', '.MP4', '.MOV')):
+                    video_files.append(os.path.join(root, file))
+        video_files = sorted(video_files)
+    else:
+        # Support multiple patterns (e.g., *.mp4 and *.mov)
+        if pattern == '*.mp4':
+            # Default: search for both mp4 and mov
+            video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
+            video_files += glob.glob(os.path.join(video_dir, '*.mov'))
+            video_files += glob.glob(os.path.join(video_dir, '*.MP4'))
+            video_files += glob.glob(os.path.join(video_dir, '*.MOV'))
+            video_files = sorted(video_files)
+        else:
+            video_files = sorted(glob.glob(os.path.join(video_dir, pattern)))
     
     if not video_files:
         print(f"ERROR: No videos found matching {pattern} in {video_dir}")
@@ -212,20 +230,25 @@ def main():
         epilog="""
 Examples:
   # Test single video
-  python test_openface_flow.py --video ../videos/workout1.mp4
+  python test_openface_flow.py --video ../../videos/workout1.mp4
   
-  # Test multiple videos
-  python test_openface_flow.py --video-dir ../videos/ --max-videos 5
+  # Test all videos in Augmented directory (recursive)
+  python test_openface_flow.py --video-dir ../../lifting_videos/Augmented --recursive
+  
+  # Test first 10 videos from Augmented
+  python test_openface_flow.py --video-dir ../../lifting_videos/Augmented --recursive --max-videos 10
   
   # Verify CSV columns
-  python test_openface_flow.py --video ../videos/workout1.mp4 --verify-csv
+  python test_openface_flow.py --video ../../videos/workout1.mp4 --verify-csv
         """
     )
     
     parser.add_argument('--video', help='Path to single video file')
     parser.add_argument('--video-dir', help='Directory containing videos')
     parser.add_argument('--max-videos', type=int, help='Maximum videos to test')
-    parser.add_argument('--pattern', default='*.mp4', help='Video file pattern (default: *.mp4)')
+    parser.add_argument('--pattern', default='*.mp4', help='Video file pattern (default: *.mp4, also searches *.mov)')
+    parser.add_argument('--recursive', '-r', action='store_true',
+                       help='Search recursively in subdirectories (for Augmented structure)')
     parser.add_argument('--verify-csv', action='store_true', 
                        help='Verify CSV columns (only with --video)')
     
@@ -260,7 +283,7 @@ Examples:
             print(f"ERROR: Directory not found: {args.video_dir}")
             return
         
-        test_video_directory(args.video_dir, args.max_videos, args.pattern)
+        test_video_directory(args.video_dir, args.max_videos, args.pattern, args.recursive)
 
 
 if __name__ == '__main__':
