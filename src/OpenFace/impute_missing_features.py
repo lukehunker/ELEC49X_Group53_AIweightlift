@@ -26,13 +26,36 @@ def load_rpe_labels(rpe_csv_path):
     """Load RPE labels for each video."""
     df = pd.read_csv(rpe_csv_path)
     
-    # Expected columns: video_name, exercise_type, rpe
-    required_cols = ['video_name', 'exercise_type', 'rpe']
+    # Expected columns: Video, RPE (from Dataset_labelled.csv)
+    required_cols = ['Video', 'RPE']
     for col in required_cols:
         if col not in df.columns:
-            raise ValueError(f"RPE CSV must have column: {col}")
+            raise ValueError(f"RPE CSV must have column: {col}. Found: {list(df.columns)}")
     
-    return df
+    # Normalize video names to match feature CSV format
+    # Dataset_labelled.csv has "Bench Press 1", features CSV has "Bench Press 1.mp4"
+    df['video_name'] = df['Video'].apply(lambda x: f"{x}.mp4" if not x.endswith('.mp4') else x)
+    df['rpe'] = df['RPE']
+    
+    # Extract exercise type from video name
+    def extract_exercise(video_name):
+        video_lower = video_name.lower()
+        if 'squat' in video_lower:
+            return 'squat'
+        elif 'deadlift' in video_lower:
+            return 'deadlift'
+        elif 'bench' in video_lower:
+            return 'bench_press'
+        else:
+            # Try to extract first word(s) before number
+            parts = video_name.split()
+            if len(parts) >= 2:
+                return ' '.join(parts[:-1]).lower()
+            return 'unknown'
+    
+    df['exercise_type'] = df['video_name'].apply(extract_exercise)
+    
+    return df[['video_name', 'exercise_type', 'rpe']]
 
 
 def identify_missing_videos(features_df):
@@ -84,34 +107,48 @@ def impute_by_rpe_average(features_df, rpe_df, missing_videos):
         print(f"\n  Processing: {video}")
         print(f"    Exercise: {video_exercise}, RPE: {video_rpe}")
         
-        # Find similar videos (same exercise + RPE, successfully processed)
+        # Strategy 1: Find videos with SAME EXERCISE + SAME RPE (most accurate)
         similar_videos_mask = (
             (rpe_df['exercise_type'].str.lower() == video_exercise) &
             (rpe_df['rpe'] == video_rpe) &
-            (~rpe_df['video_name'].isin(missing_videos))  # Exclude other failed videos
+            (~rpe_df['video_name'].isin(missing_videos))
         )
-        
         similar_video_names = rpe_df[similar_videos_mask]['video_name'].tolist()
-        
-        # Get features from similar videos
         similar_features = features_df[features_df['video_name'].isin(similar_video_names)]
+        imputation_method = f"{video_exercise} + RPE={video_rpe}"
         
-        if len(similar_features) == 0:
-            print(f"    WARNING: No similar videos found, trying broader match...")
+        if len(similar_features) < 2:  # Need at least 2 videos for good average
+            print(f"    Only {len(similar_features)} video(s) with {video_exercise} RPE={video_rpe}")
+            print(f"    Trying: Any exercise with RPE={video_rpe}...")
             
-            # Fallback: same exercise type only (ignore RPE)
+            # Strategy 2: Find videos with SAME RPE (any exercise)
             similar_videos_mask = (
-                (rpe_df['exercise_type'].str.lower() == video_exercise) &
+                (rpe_df['rpe'] == video_rpe) &
                 (~rpe_df['video_name'].isin(missing_videos))
             )
             similar_video_names = rpe_df[similar_videos_mask]['video_name'].tolist()
             similar_features = features_df[features_df['video_name'].isin(similar_video_names)]
+            imputation_method = f"RPE={video_rpe} (any exercise)"
             
             if len(similar_features) == 0:
-                print(f"    ERROR: No videos found for exercise '{video_exercise}', cannot impute")
-                continue
-            
-            print(f"    Using average of {len(similar_features)} videos from '{video_exercise}' (all RPE levels)")
+                print(f"    WARNING: No videos found with RPE={video_rpe}, trying same exercise...")
+                
+                # Strategy 3: Fallback to same exercise only (ignore RPE)
+                similar_videos_mask = (
+                    (rpe_df['exercise_type'].str.lower() == video_exercise) &
+                    (~rpe_df['video_name'].isin(missing_videos))
+                )
+                similar_video_names = rpe_df[similar_videos_mask]['video_name'].tolist()
+                similar_features = features_df[features_df['video_name'].isin(similar_video_names)]
+                imputation_method = f"{video_exercise} (all RPE levels)"
+                
+                if len(similar_features) == 0:
+                    print(f"    ERROR: No videos found for exercise '{video_exercise}', cannot impute")
+                    continue
+                
+                print(f"    Using average of {len(similar_features)} videos from '{video_exercise}' (all RPE levels)")
+            else:
+                print(f"    Using average of {len(similar_features)} videos with RPE={video_rpe} (any exercise)")
         else:
             print(f"    Using average of {len(similar_features)} videos with {video_exercise} RPE={video_rpe}")
         
@@ -123,8 +160,17 @@ def impute_by_rpe_average(features_df, rpe_df, missing_videos):
         for col in numeric_cols:
             features_df.loc[video_idx, col] = mean_features[col]
         
-        # Clear error column
+        # Clear error column and mark as imputed
         features_df.loc[video_idx, 'error'] = np.nan
+        
+        # Add imputation metadata column if it doesn't exist
+        if 'imputed' not in features_df.columns:
+            features_df['imputed'] = False
+        if 'imputation_method' not in features_df.columns:
+            features_df['imputation_method'] = ''
+        
+        features_df.loc[video_idx, 'imputed'] = True
+        features_df.loc[video_idx, 'imputation_method'] = imputation_method
         
         # Track imputation
         imputation_summary.append({
@@ -132,7 +178,8 @@ def impute_by_rpe_average(features_df, rpe_df, missing_videos):
             'exercise': video_exercise,
             'rpe': video_rpe,
             'similar_videos_count': len(similar_features),
-            'imputed_features': len(numeric_cols)
+            'imputed_features': len(numeric_cols),
+            'imputation_method': imputation_method
         })
         
         # Show sample of imputed values
@@ -152,15 +199,14 @@ def main():
 Example:
     python impute_missing_features.py \\
         --features ../../output/openface_max_features.csv \\
-        --rpe ../../data/rpe_labels.csv \\
+        --rpe ../../lifting_videos/Augmented/dataset_labelled.csv \\
         --output ../../output/openface_max_features_imputed.csv
 
-RPE labels CSV format:
-    video_name,exercise_type,rpe
-    Squat 1.mp4,squat,7
-    Squat 10.mp4,squat,8
-    Deadlift 5.mp4,deadlift,9
-    ...
+The script will:
+1. Load RPE labels from dataset_labelled.csv (Video, RPE columns)
+2. Identify videos with insufficient frames (errors in features CSV)
+3. For each failed video, find all successful videos with the same RPE
+4. Average their features and fill in the missing video's data
         """
     )
     
@@ -230,17 +276,28 @@ RPE labels CSV format:
     print("\n" + "="*80)
     print("IMPUTATION COMPLETE")
     print("="*80)
-    print(f"\nVideos imputed: {len(summary_df)}")
-    print(f"Videos with complete data: {len(features_df) - len(missing_videos)}")
-    print(f"Total videos in output: {len(imputed_df)}")
+    print(f"\nFinal Dataset Composition:")
+    print(f"  Original successful videos: {len(features_df) - len(missing_videos)}")
+    print(f"  Videos with imputed features: {len(summary_df)}")
+    print(f"  Total videos in output: {len(imputed_df)}")
+    print(f"\nAll rows are included in the final CSV:")
+    print(f"  ✓ Successfully processed videos (real features)")
+    print(f"  ✓ Imputed videos (generated features from averaging)")
     
     if len(summary_df) > 0:
         print(f"\nImputation breakdown by exercise:")
         for exercise in summary_df['exercise'].unique():
             count = len(summary_df[summary_df['exercise'] == exercise])
-            print(f"  {exercise.capitalize()}: {count} videos")
+            print(f"  {exercise.capitalize()}: {count} videos imputed")
+        
+        print(f"\nImputation methods used:")
+        for method in summary_df['imputation_method'].unique():
+            count = len(summary_df[summary_df['imputation_method'] == method])
+            print(f"  {method}: {count} videos")
     
     print("\n✓ Ready for LGBM training!")
+    print(f"\nNote: Check 'imputed' column in output CSV to identify which videos")
+    print(f"      had features generated vs. extracted from actual video analysis.")
 
 
 if __name__ == '__main__':
