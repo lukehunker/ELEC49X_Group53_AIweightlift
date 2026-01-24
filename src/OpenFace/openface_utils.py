@@ -18,12 +18,13 @@ import glob
 import random
 import sys
 
-# Import pose-guided face detection (optional - only if MMPose available)
+# Import pose-guided face detection (optional - only if MediaPipe available)
 try:
     from pose_guided_face_detection import PoseGuidedFaceDetector
     POSE_GUIDANCE_AVAILABLE = True
 except ImportError:
     POSE_GUIDANCE_AVAILABLE = False
+    print("Note: Pose guidance not available (MediaPipe not installed)")
 
 # =========================================
 # CONFIGURATION
@@ -72,73 +73,6 @@ def get_video_metadata(video_path):
     return metadata
 
 
-def classify_resolution(width, height):
-    """Classify video resolution quality."""
-    pixels = width * height
-    if pixels >= 1920 * 1080:
-        return "High (1080p+)"
-    elif pixels >= 1280 * 720:
-        return "Medium (720p)"
-    elif pixels >= 640 * 480:
-        return "Low (480p)"
-    else:
-        return "Very Low (<480p)"
-
-
-def find_videos(pattern_list, max_per_exercise=2, randomize=True):
-    """
-    Find a small subset of videos for testing.
-    Automatically detects if VIDEOS_DIR has subdirectory structure or is flat.
-    
-    Args:
-        pattern_list: List of file patterns to search for (e.g., ['*.mp4', '*.avi'])
-        max_per_exercise: Maximum videos to return per exercise type (default: 2)
-        randomize: If True, randomly select videos instead of always using the first ones (default: True)
-    
-    Returns:
-        List of video file paths
-    """
-    video_files = []
-    
-    # Check if we have subdirectories (lifting_videos/Augmented structure)
-    subdirs = ['Augmented/Deadlift', 'Augmented/Squat', 'Augmented/Bench Press']
-    has_subdirs = any(os.path.exists(os.path.join(VIDEOS_DIR, subdir)) for subdir in subdirs)
-    
-    if has_subdirs:
-        # Use subdirectory structure (lifting_videos/Augmented/)
-        for subdir in subdirs:
-            exercise_videos = []
-            for pattern in pattern_list:
-                found = glob.glob(os.path.join(VIDEOS_DIR, subdir, pattern))
-                exercise_videos.extend(found)
-            
-            # Remove duplicates
-            exercise_videos = list(set(exercise_videos))
-            
-            # Randomize or sort
-            if randomize and len(exercise_videos) > max_per_exercise:
-                video_files.extend(random.sample(exercise_videos, max_per_exercise))
-            else:
-                exercise_videos = sorted(exercise_videos)
-                video_files.extend(exercise_videos[:max_per_exercise])
-    else:
-        # Flat structure (videos/ folder) - just grab files directly
-        for pattern in pattern_list:
-            found = glob.glob(os.path.join(VIDEOS_DIR, pattern))
-            video_files.extend(found)
-        
-        # Remove duplicates
-        video_files = list(set(video_files))
-        
-        # Randomize or sort, then limit
-        if randomize and len(video_files) > max_per_exercise * 3:
-            video_files = random.sample(video_files, max_per_exercise * 3)
-        else:
-            video_files = sorted(video_files)[:max_per_exercise * 3]
-    
-    return video_files
-
-
 # =========================================
 # OPENFACE PROCESSING
 # =========================================
@@ -150,7 +84,7 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
         video_path: Path to the video file
         force_rerun: If True, rerun even if CSV exists
         high_quality: If True, use higher quality settings (slower but more accurate)
-        use_pose_guidance: If True, use MMPose to crop video to main person's face first
+        use_pose_guidance: If True, use MediaPipe Pose to crop video to main person's face first
                           (helps with multi-person videos and background faces)
         
     Returns:
@@ -165,7 +99,7 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
             print("Warning: Pose guidance failed, using original video")
             video_path = original_video_path
     elif use_pose_guidance and not POSE_GUIDANCE_AVAILABLE:
-        print("Warning: Pose guidance requested but MMPose not available, using original video")
+        print("Warning: Pose guidance requested but MediaPipe not available, using original video")
     
     video_name = os.path.splitext(os.path.basename(original_video_path))[0]  # Use original name for CSV
     
@@ -297,84 +231,6 @@ def load_landmark_data(csv_path, success_only=True, sample_fps=None, columns_onl
     return df
 
 
-# =========================================
-# VISUALIZATION HELPERS
-# =========================================
-def draw_landmarks(frame, xs, ys, show_points=True, show_box=True, color_by_group=False):
-    """
-    Draw facial landmarks on a frame.
-    
-    Args:
-        frame: The video frame to draw on
-        xs: X coordinates of landmarks (array of 68 values)
-        ys: Y coordinates of landmarks (array of 68 values)
-        show_points: Whether to draw landmark points
-        show_box: Whether to draw bounding box
-        color_by_group: Whether to color landmarks by facial region
-    """
-    if show_box:
-        # Calculate bounding box with padding
-        x_min, x_max = int(np.min(xs)), int(np.max(xs))
-        y_min, y_max = int(np.min(ys)), int(np.max(ys))
-        padding = 20
-        x_min = max(0, x_min - padding)
-        y_min = max(0, y_min - padding)
-        x_max = min(frame.shape[1], x_max + padding)
-        y_max = min(frame.shape[0], y_max + padding)
-        cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 3)
-    
-    if show_points:
-        if color_by_group:
-            colors = {
-                'left_eyebrow': (255, 200, 0),
-                'right_eyebrow': (255, 200, 0),
-                'nose_bridge': (0, 255, 0),
-                'nose_tip': (0, 255, 0),
-                'left_eye': (255, 0, 255),
-                'right_eye': (255, 0, 255),
-                'mouth_outer': (0, 255, 255),
-                'mouth_inner': (0, 200, 200),
-                'jawline': (255, 100, 100)
-            }
-            for group_name, indices in LANDMARK_GROUPS.items():
-                color = colors.get(group_name, (255, 255, 255))
-                for idx in indices:
-                    if idx < len(xs):
-                        x, y = int(xs[idx]), int(ys[idx])
-                        cv2.circle(frame, (x, y), 3, color, -1)
-                        cv2.circle(frame, (x, y), 4, (255, 255, 255), 1)
-        else:
-            # Simple yellow dots
-            for i in range(min(68, len(xs))):
-                x, y = int(xs[i]), int(ys[i])
-                cv2.circle(frame, (x, y), 2, (0, 255, 255), -1)
-
-
-def add_text_overlay(frame, lines, bg_color=(0, 0, 0), bg_alpha=0.6):
-    """
-    Add text overlay with semi-transparent background.
-    
-    Args:
-        frame: The video frame
-        lines: List of (text, y_position) tuples
-        bg_color: Background color (BGR)
-        bg_alpha: Background transparency (0-1)
-    """
-    if not lines:
-        return
-    
-    # Calculate background size
-    max_y = max(y for _, y in lines)
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (5, 20), (450, max_y + 15), bg_color, -1)
-    cv2.addWeighted(overlay, bg_alpha, frame, 1 - bg_alpha, 0, frame)
-    
-    # Draw text
-    for text, y_pos in lines:
-        cv2.putText(frame, text, (10, y_pos),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-
-
 def check_openface_binary():
     """Check if OpenFace binary exists and is accessible."""
     if not os.path.isfile(OPENFACE_BIN):
@@ -392,7 +248,7 @@ def preprocess_video_with_pose_guidance(video_path, cache_dir=None):
     Preprocess video using pose-guided cropping to focus on main person's face.
     
     This solves the problem of OpenFace detecting background faces instead of
-    the exercising person by using MMPose body keypoints to locate the correct face.
+    the exercising person by using MediaPipe Pose body keypoints to locate the correct face.
     
     Args:
         video_path: Path to input video
