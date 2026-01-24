@@ -40,31 +40,26 @@ class PoseGuidedFaceDetector:
         'right_shoulder': 6
     }
     
-    def __init__(self, pose_model=None, person_detector=None, verbose=True):
-        """
-        Initialize pose-guided face detector using MediaPipe.
-        
-        Args:
-            pose_model: Not used (kept for API compatibility)
-            person_detector: Not used (kept for API compatibility)
-            verbose: Print progress messages
-        """
+    def __init__(self, verbose=True):
+        """Initialize pose-guided face detector with MediaPipe."""
         self.verbose = verbose
         self._load_mediapipe()
     
     def _load_mediapipe(self):
-        """Load MediaPipe Pose for body keypoint detection."""
+        
         try:
             import mediapipe as mp
             self._mp_pose = mp.solutions.pose.Pose(
-                static_image_mode=True,
+                static_image_mode=False,  
                 model_complexity=1,
                 enable_segmentation=False,
-                min_detection_confidence=0.5
+                smooth_landmarks=True,  
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5  
             )
             if self.verbose:
                 print("✓ Using MediaPipe Pose for face region detection")
-                print("  (Simple and fast - no mmcv dependencies)")
+                print("  (Video mode with temporal smoothing enabled)")
         except ImportError:
             raise ImportError("MediaPipe required. Install with: pip install mediapipe")
     
@@ -107,13 +102,13 @@ class PoseGuidedFaceDetector:
         bbox_height = y2 - y1
         
         # Expand horizontally (add 50% on each side)
-        expansion_x = bbox_width * 0.5
+        expansion_x = bbox_width * 0.6  # Increased padding
         x1 = max(0, x1 - expansion_x)
         x2 = min(width, x2 + expansion_x)
         
         # Expand vertically (add more above for forehead, below for chin/neck)
-        expansion_top = bbox_height * 0.8  # More room above for forehead
-        expansion_bottom = bbox_height * 1.2  # More room below for chin/neck
+        expansion_top = bbox_height * 1.0  # More room above for forehead
+        expansion_bottom = bbox_height * 1.5  # More room below for chin/neck
         y1 = max(0, y1 - expansion_top)
         y2 = min(height, y2 + expansion_bottom)
         
@@ -122,6 +117,7 @@ class PoseGuidedFaceDetector:
     def detect_main_person(self, frame):
         """
         Detect the main person in frame using MediaPipe.
+        Prioritizes the largest/closest person (the lifter, not background people).
         
         Args:
             frame: Input video frame (BGR format)
@@ -165,6 +161,16 @@ class PoseGuidedFaceDetector:
             lm = results.pose_landmarks.landmark[mp_idx]
             keypoints[coco_idx] = [lm.x * w, lm.y * h, lm.visibility]
         
+        # Calculate person size (torso height) to prioritize largest person
+        # This ensures we track the lifter, not background people
+        visible_kpts = keypoints[keypoints[:, 2] > 0.3]
+        if len(visible_kpts) > 0:
+            # Store person size for consistency checking
+            y_coords = visible_kpts[:, 1]
+            person_height = np.max(y_coords) - np.min(y_coords)
+            keypoints_with_size = (keypoints, person_height)
+            return keypoints_with_size
+        
         return keypoints
     
 
@@ -183,9 +189,28 @@ class PoseGuidedFaceDetector:
         Returns:
             Path to cropped video, or None if failed
         """
-        cap = cv2.VideoCapture(input_video_path)
-        if not cap.isOpened():
-            raise ValueError(f"Cannot open video: {input_video_path}")
+        # Try different backends for problematic codecs (AV1, HEVC, etc.)
+        backends_to_try = [
+            (cv2.CAP_FFMPEG, "FFmpeg"),
+            (cv2.CAP_ANY, "Auto")
+        ]
+        
+        cap = None
+        for backend_id, backend_name in backends_to_try:
+            test_cap = cv2.VideoCapture(input_video_path, backend_id)
+            if test_cap.isOpened():
+                # Test if we can actually read frames
+                ret, test_frame = test_cap.read()
+                if ret and test_frame is not None:
+                    test_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset to start
+                    cap = test_cap
+                    if self.verbose:
+                        print(f"  Using OpenCV backend: {backend_name}")
+                    break
+                test_cap.release()
+        
+        if cap is None or not cap.isOpened():
+            raise ValueError(f"Cannot open video with any backend: {input_video_path}")
         
         # Get video properties
         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -202,8 +227,10 @@ class PoseGuidedFaceDetector:
         # First pass: detect head bbox for EVERY frame
         if self.verbose:
             print(f"  Pass 1: Detecting head regions in every frame...")
+            print(f"  Strategy: Track largest person (lifter, not background)")
         
         all_bboxes = []  # One bbox per frame
+        all_person_sizes = []  # Track person size for consistency
         frame_idx = 0
         
         while True:
@@ -212,9 +239,17 @@ class PoseGuidedFaceDetector:
                 break
             
             # Detect pose in THIS frame
-            keypoints = self.detect_main_person(frame)
+            detection = self.detect_main_person(frame)
             
-            if keypoints is not None:
+            if detection is not None:
+                # Unpack keypoints and person size
+                if isinstance(detection, tuple):
+                    keypoints, person_size = detection
+                    all_person_sizes.append(person_size)
+                else:
+                    keypoints = detection
+                    all_person_sizes.append(0)
+                
                 bbox = self.get_head_bbox_from_pose(keypoints, frame.shape)
                 all_bboxes.append(bbox if bbox is not None else None)
             else:
@@ -226,6 +261,20 @@ class PoseGuidedFaceDetector:
                 print(f"    Processed {frame_idx}/{total_frames} frames...")
         
         cap.release()
+        
+        # Validate consistent person tracking (filter outliers)
+        if all_person_sizes:
+            median_size = np.median([s for s in all_person_sizes if s > 0])
+            if self.verbose:
+                print(f"  Median person size: {median_size:.0f}px (filtering outliers)")
+            
+            # Filter out detections that are too small (likely background people)
+            size_threshold = median_size * 0.6  # Must be at least 60% of median size
+            for i, (bbox, size) in enumerate(zip(all_bboxes, all_person_sizes)):
+                if bbox is not None and size > 0 and size < size_threshold:
+                    if self.verbose and i % 100 == 0:
+                        print(f"    Frame {i}: Filtered small person (size={size:.0f} < {size_threshold:.0f})")
+                    all_bboxes[i] = None  # Remove background person detection
         
         # Fill in missing detections with nearest valid bbox
         valid_bboxes = [b for b in all_bboxes if b is not None]
@@ -251,23 +300,74 @@ class PoseGuidedFaceDetector:
                             all_bboxes[i] = all_bboxes[j]
                             break
         
-        # Smooth bboxes to reduce jitter (moving average)
-        smoothed_bboxes = self._smooth_bboxes(all_bboxes, window=15)
+        # Use FIXED crop region for entire video (eliminates all jitter)
+        # Calculate median bbox position and max dimensions
+        valid_bboxes = [b for b in all_bboxes if b is not None]
+        if not valid_bboxes:
+            if self.verbose:
+                print(f"  Warning: No valid bboxes detected")
+            return None
         
-        # Determine output size (use max dimensions to fit all frames)
-        max_width = max(b[2] - b[0] for b in smoothed_bboxes if b is not None)
-        max_height = max(b[3] - b[1] for b in smoothed_bboxes if b is not None)
-        crop_width = max_width
-        crop_height = max_height
+        # Get median center and max dimensions
+        x1_median = int(np.median([b[0] for b in valid_bboxes]))
+        y1_median = int(np.median([b[1] for b in valid_bboxes]))
+        x2_median = int(np.median([b[2] for b in valid_bboxes]))
+        y2_median = int(np.median([b[3] for b in valid_bboxes]))
+        
+        # Use max dimensions to ensure face fits in all frames
+        max_width = max(b[2] - b[0] for b in valid_bboxes)
+        max_height = max(b[3] - b[1] for b in valid_bboxes)
+        
+        # Calculate fixed crop region centered on median position
+        center_x = (x1_median + x2_median) // 2
+        center_y = (y1_median + y2_median) // 2
+        
+        crop_width = int(max_width * 1.2)  # 20% extra padding
+        crop_height = int(max_height * 1.2)
+        
+        # Fixed bbox for ALL frames (completely stable)
+        fixed_x1 = max(0, center_x - crop_width // 2)
+        fixed_y1 = max(0, center_y - crop_height // 2)
+        fixed_x2 = min(original_width, fixed_x1 + crop_width)
+        fixed_y2 = min(original_height, fixed_y1 + crop_height)
+        
+        # Adjust if we hit boundaries
+        if fixed_x2 - fixed_x1 < crop_width:
+            fixed_x1 = max(0, fixed_x2 - crop_width)
+        if fixed_y2 - fixed_y1 < crop_height:
+            fixed_y1 = max(0, fixed_y2 - crop_height)
+        
+        crop_width = fixed_x2 - fixed_x1
+        crop_height = fixed_y2 - fixed_y1
         
         if self.verbose:
-            print(f"  Output dimensions: {crop_width}x{crop_height} (max bbox size)")
+            print(f"  Fixed crop region: {crop_width}x{crop_height} (no jitter)")
+            print(f"  Position: ({fixed_x1}, {fixed_y1}) to ({fixed_x2}, {fixed_y2})")
         
         # Second pass: crop each frame individually with its bbox
         if self.verbose:
             print(f"  Pass 2: Cropping each frame to tracked face...")
         
-        cap = cv2.VideoCapture(input_video_path)
+        # Try different backends for problematic codecs
+        backends_to_try = [
+            (cv2.CAP_FFMPEG, "FFmpeg"),
+            (cv2.CAP_ANY, "Auto")
+        ]
+        
+        cap = None
+        for backend_id, backend_name in backends_to_try:
+            test_cap = cv2.VideoCapture(input_video_path, backend_id)
+            if test_cap.isOpened():
+                ret, test_frame = test_cap.read()
+                if ret and test_frame is not None:
+                    test_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    cap = test_cap
+                    break
+                test_cap.release()
+        
+        if cap is None or not cap.isOpened():
+            raise ValueError(f"Cannot reopen video: {input_video_path}")
+        
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_video_path, fourcc, fps, (crop_width, crop_height))
         
@@ -277,24 +377,14 @@ class PoseGuidedFaceDetector:
             if not ret:
                 break
             
-            if frame_idx < len(smoothed_bboxes) and smoothed_bboxes[frame_idx] is not None:
-                x1, y1, x2, y2 = smoothed_bboxes[frame_idx]
-                
-                # Crop this frame to its specific bbox
-                cropped = frame[y1:y2, x1:x2]
-                
-                # Resize to standard output size (in case bbox size varies slightly)
-                if cropped.shape[1] != crop_width or cropped.shape[0] != crop_height:
-                    cropped = cv2.resize(cropped, (crop_width, crop_height))
-                
-                out.write(cropped)
-            else:
-                # Fallback: center crop
-                y_start = max(0, (original_height - crop_height) // 2)
-                x_start = max(0, (original_width - crop_width) // 2)
-                cropped = frame[y_start:y_start+crop_height, x_start:x_start+crop_width]
-                out.write(cropped)
+            # Use FIXED crop region for all frames (completely stable)
+            cropped = frame[fixed_y1:fixed_y2, fixed_x1:fixed_x2]
             
+            # Ensure consistent output size
+            if cropped.shape[1] != crop_width or cropped.shape[0] != crop_height:
+                cropped = cv2.resize(cropped, (crop_width, crop_height))
+            
+            out.write(cropped)
             frame_idx += 1
         
         cap.release()
