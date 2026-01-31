@@ -103,7 +103,7 @@ class OpenFaceExtractor:
         try:
             import os as os_check
             if 'DISPLAY' not in os_check.environ and not os_check.path.exists('/mnt/wslg'):
-                self._log("⚠ WARNING: No display detected (DISPLAY not set, WSLg not found)")
+                self._log("WARNING: No display detected (DISPLAY not set, WSLg not found)")
                 self._log("  For WSL2: Ensure Windows 11 with WSLg, or use VcXsrv/X11")
                 self._log("  For SSH: Use 'ssh -X' for X11 forwarding")
                 self._log("  Skipping visualization...")
@@ -117,13 +117,13 @@ class OpenFaceExtractor:
         # Open video
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            self._log(f"⚠ Warning: Could not open video for visualization: {video_path}")
+            self._log(f"Warning: Could not open video for visualization: {video_path}")
             return
         
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        self._log(f"\n📹 VISUALIZATION ACTIVE")
+        self._log(f"\nVISUALIZATION ACTIVE")
         self._log(f"  Video: {os.path.basename(video_path)}")
         self._log(f"  Frames: {total_frames}, FPS: {fps:.1f}")
         self._log(f"  Controls: Press 'q' to quit, 's' to skip")
@@ -132,7 +132,7 @@ class OpenFaceExtractor:
         try:
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         except Exception as e:
-            self._log(f"⚠ ERROR: Could not create window (display issue): {e}")
+            self._log(f"ERROR: Could not create window (display issue): {e}")
             self._log("  Check DISPLAY variable or WSLg/X11 setup")
             cap.release()
             return
@@ -244,7 +244,7 @@ class OpenFaceExtractor:
                     vis_video_path = pose_guided_path
                     self._log(f"Visualizing cropped video: {os.path.basename(pose_guided_path)}")
                 else:
-                    self._log(f"⚠ WARNING: Pose-guided video not found: {pose_guided_path}")
+                    self._log(f"WARNING: Pose-guided video not found: {pose_guided_path}")
                     self._log("  Landmarks will not align correctly with original video!")
             
             self._visualize_landmarks(vis_video_path, csv_path)
@@ -292,7 +292,7 @@ class OpenFaceExtractor:
             'valid_frames': len(df)
         }
         
-        self._log(f"\n✓ Extracted {len([k for k in features.keys() if k != 'metadata'])} features")
+        self._log(f"\nExtracted {len([k for k in features.keys() if k != 'metadata'])} features")
         
         return features
     

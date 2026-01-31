@@ -148,7 +148,7 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
     if not csv_files:
         raise RuntimeError("OpenFace finished but did not generate a CSV file.")
     
-    print(f"✓ OpenFace processing complete: {os.path.basename(csv_files[0])}")
+    print(f"OpenFace processing complete: {os.path.basename(csv_files[0])}")
     return csv_files[0]
 
 
