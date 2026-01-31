@@ -58,7 +58,7 @@ class PoseGuidedFaceDetector:
                 min_tracking_confidence=0.3  # Lowered from 0.5 for better continuity
             )
             if self.verbose:
-                print("✓ Using MediaPipe Pose for face region detection")
+                print("Using MediaPipe Pose for face region detection")
                 print("  (Video mode with temporal smoothing enabled)")
         except ImportError:
             raise ImportError("MediaPipe required. Install with: pip install mediapipe")
@@ -392,7 +392,7 @@ class PoseGuidedFaceDetector:
         out.release()
         
         if self.verbose:
-            print(f"  ✓ Cropped video saved: {output_video_path}")
+            print(f"  Cropped video saved: {output_video_path}")
             print(f"    Reduction: {original_width}x{original_height} → {crop_width}x{crop_height}")
             print(f"    Crop %: {(crop_width*crop_height)/(original_width*original_height)*100:.1f}%")
             print(f"    Mode: Frame-by-frame face tracking (follows head movement)")

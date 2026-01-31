@@ -56,7 +56,7 @@ def test_single_video(video_path, verbose=True, visualize=False):
             detection_count = features.get('detection_count', 0)
             total_frames = metadata.get('total_frames', 0)
             
-            print(f"\n✓ SUCCESS: {os.path.basename(video_path)}")
+            print(f"\nSUCCESS: {os.path.basename(video_path)}")
             print(f"  Detection: {detection_count}/{total_frames} frames ({detection_rate*100:.1f}%)")
             print(f"  Confidence: {features.get('confidence_mean', 0):.3f}")
             print(f"  Sample AUs: AU04={features.get('AU04_max', 0):.3f}, AU12={features.get('AU12_max', 0):.3f}")
@@ -71,7 +71,7 @@ def test_single_video(video_path, verbose=True, visualize=False):
         
     except Exception as e:
         if verbose:
-            print(f"\n✗ ERROR: {e}")
+            print(f"\nERROR: {e}")
         
         # Return error row for CSV
         return {
@@ -137,7 +137,7 @@ def test_video_directory(video_dir, max_videos=None, pattern='*.mp4', recursive=
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
     
-    print(f"\n✓ Raw features saved to: {output_path}")
+    print(f"\nRaw features saved to: {output_path}")
     
     return output_path
 
@@ -149,7 +149,7 @@ def run_imputation(features_csv, rpe_labels_csv):
     print(f"{'='*80}")
     
     if not os.path.exists(rpe_labels_csv):
-        print(f"⚠ WARNING: RPE labels not found: {rpe_labels_csv}")
+        print(f"WARNING: RPE labels not found: {rpe_labels_csv}")
         print("  Cannot impute without RPE labels.")
         print(f"  Raw features saved to: {features_csv}")
         return
@@ -163,22 +163,22 @@ def run_imputation(features_csv, rpe_labels_csv):
         
         # Check for missing videos (those with error column)
         if 'error' not in features_df.columns:
-            print("\n✓ All videos processed successfully - no imputation needed!")
+            print("\nAll videos processed successfully - no imputation needed!")
             # Copy to imputed file anyway for consistency
             output_path = features_csv.replace('.csv', '_imputed.csv')
             features_df['imputed'] = False
             features_df.to_csv(output_path, index=False)
-            print(f"✓ Complete dataset saved to: {output_path}")
+            print(f"Complete dataset saved to: {output_path}")
             return
         
         missing_videos = identify_missing_videos(features_df)
         
         if len(missing_videos) == 0:
-            print("\n✓ All videos processed successfully - no imputation needed!")
+            print("\nAll videos processed successfully - no imputation needed!")
             output_path = features_csv.replace('.csv', '_imputed.csv')
             features_df['imputed'] = False
             features_df.to_csv(output_path, index=False)
-            print(f"✓ Complete dataset saved to: {output_path}")
+            print(f"Complete dataset saved to: {output_path}")
             return
         
         # Impute missing features
@@ -192,15 +192,15 @@ def run_imputation(features_csv, rpe_labels_csv):
         print(f"\n{'='*80}")
         print("IMPUTATION COMPLETE")
         print(f"{'='*80}")
-        print(f"\n✓ Complete dataset saved to: {output_path}")
+        print(f"\nComplete dataset saved to: {output_path}")
         print(f"\nDataset Composition:")
         print(f"  Successfully processed: {len(features_df) - len(missing_videos)} videos")
         print(f"  Imputed (failed): {len(missing_videos)} videos")
         print(f"  Total: {len(imputed_df)} videos")
-        print(f"\n✓ Ready for LGBM training!")
+        print(f"\nReady for LGBM training!")
         
     except Exception as e:
-        print(f"\n⚠ ERROR during imputation: {e}")
+        print(f"\nERROR during imputation: {e}")
         import traceback
         traceback.print_exc()
         print(f"\nRaw features still available at: {features_csv}")
