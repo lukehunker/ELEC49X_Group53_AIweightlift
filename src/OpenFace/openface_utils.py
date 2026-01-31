@@ -126,6 +126,7 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
         "-pdmparams",  # PDM parameters (shape variations)
         "-aus",  # Action Units
         "-gaze",  # Gaze direction (useful for strain detection)
+        "-multi_view", "1",  # Multi-view tracking (better for head rotation)
     ]
     
     if high_quality:
