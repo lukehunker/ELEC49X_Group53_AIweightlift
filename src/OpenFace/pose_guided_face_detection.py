@@ -54,8 +54,8 @@ class PoseGuidedFaceDetector:
                 model_complexity=1,
                 enable_segmentation=False,
                 smooth_landmarks=True,  
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5  
+                min_detection_confidence=0.3,  # Lowered from 0.5 for challenging frames
+                min_tracking_confidence=0.3  # Lowered from 0.5 for better continuity
             )
             if self.verbose:
                 print("✓ Using MediaPipe Pose for face region detection")
@@ -63,7 +63,7 @@ class PoseGuidedFaceDetector:
         except ImportError:
             raise ImportError("MediaPipe required. Install with: pip install mediapipe")
     
-    def get_head_bbox_from_pose(self, keypoints, img_shape, confidence_threshold=0.3):
+    def get_head_bbox_from_pose(self, keypoints, img_shape, confidence_threshold=0.2):
         """
         Calculate head bounding box from body keypoints.
         
@@ -101,14 +101,15 @@ class PoseGuidedFaceDetector:
         bbox_width = x2 - x1
         bbox_height = y2 - y1
         
-        # Expand horizontally (add 50% on each side)
-        expansion_x = bbox_width * 0.6  # Increased padding
+        # INCREASED EXPANSION for better OpenFace detection
+        # Larger crop gives OpenFace more context and handles motion better
+        expansion_x = bbox_width * 1.0  # 100% wider (was 60%)
         x1 = max(0, x1 - expansion_x)
         x2 = min(width, x2 + expansion_x)
         
-        # Expand vertically (add more above for forehead, below for chin/neck)
-        expansion_top = bbox_height * 1.0  # More room above for forehead
-        expansion_bottom = bbox_height * 1.5  # More room below for chin/neck
+        # Expand vertically (more space = better detection during head movement)
+        expansion_top = bbox_height * 1.5  # More forehead (was 1.0)
+        expansion_bottom = bbox_height * 2.0  # More chin/neck (was 1.5)
         y1 = max(0, y1 - expansion_top)
         y2 = min(height, y2 + expansion_bottom)
         
