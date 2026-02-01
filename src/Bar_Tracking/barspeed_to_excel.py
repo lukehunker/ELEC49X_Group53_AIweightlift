@@ -486,6 +486,86 @@ def process_video(video_path, movement_name, out_dir):
         "delta_speed_m_s": delta_m_s,
     }
 
+def run():
+    rows = []
+    print("\n==========================================")
+    print("    SINGLE VIDEO PROCESSING MODE")
+    print("==========================================\n")
+
+    # 1. Ask for Movement
+    print("Select Movement Folder:")
+    for i, m in enumerate(MOVEMENT_FOLDERS):
+        print(f"  {i + 1}. {m}")
+
+    try:
+        idx_str = input("\nEnter number (1-3): ")
+        idx = int(idx_str) - 1
+        if idx < 0 or idx >= len(MOVEMENT_FOLDERS):
+            print("Invalid selection.")
+            exit()
+        folder_name = MOVEMENT_FOLDERS[idx]
+    except ValueError:
+        print("Invalid input.")
+        exit()
+
+    # 2. Ask for Video Filename
+    print(f"\nTarget Folder: {folder_name}")
+    target_video = input(f"Enter exact video filename (e.g. '{folder_name} 11.mp4'): ").strip()
+
+    # Check if file exists
+    folder_path, _ = find_movement_folder(VIDEOS_ROOT, folder_name)
+    video_path = os.path.join(folder_path, target_video)
+
+    if not os.path.exists(video_path):
+        print(f"\n[ERROR] File not found: {video_path}")
+        print("Please check the name and try again.")
+        exit()
+
+    # 3. Process
+    print(f"\n[INFO] Processing: {target_video} ...")
+
+    # Use output folder for that movement (so text files land in right place)
+    movement_out = os.path.join(OUTPUT_ROOT, folder_name.replace(" ", "_"))  # Fixed Path
+    os.makedirs(movement_out, exist_ok=True)
+
+    try:
+        feats = process_video(video_path, folder_name, movement_out)
+
+        if feats:
+            # --- APPEND TO MASTER EXCEL ---
+            # Load existing master if it exists
+            if os.path.exists(MASTER_EXCEL_PATH):
+                try:
+                    master_df = pd.read_excel(MASTER_EXCEL_PATH)
+                    # Remove any previous entry for this exact video to prevent duplicates
+                    master_df = master_df[master_df["video_name"] != feats["video_name"]]
+                except Exception:
+                    master_df = pd.DataFrame()
+            else:
+                master_df = pd.DataFrame()
+
+            # Create DataFrame for current row
+            new_row_df = pd.DataFrame([feats])
+
+            # Concatenate
+            final_df = pd.concat([master_df, new_row_df], ignore_index=True)
+
+            # Save back to Master
+            try:
+                final_df.to_excel(MASTER_EXCEL_PATH, index=False)
+                print(f"\n[DONE] Added result to MASTER file: {MASTER_EXCEL_PATH}")
+                print(new_row_df)
+            except PermissionError:
+                print(f"\n[ERROR] Could not save to {MASTER_EXCEL_PATH}. Is it open?")
+                print("Result data (Save manually):", feats)
+
+        else:
+            print("\n[FAILED] Processing completed but no valid data returned.")
+
+    except Exception as e:
+        print(f"\n[CRASH] The video caused a crash: {e}")
+        traceback.print_exc()
+
 # ---------------------------------------------------------
 # Main (Interactive Single Mode)
 # ---------------------------------------------------------
