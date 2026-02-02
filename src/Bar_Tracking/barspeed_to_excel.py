@@ -10,11 +10,11 @@ import pandas as pd
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
-VIDEOS_ROOT = r"C:\Users\avedi\mmpose\videos"
+VIDEOS_ROOT = r"C:\Users\ajmal\Documents\ELEC49X_Group53_AIweightlift\lifting_videos\Augmented"
 MOVEMENT_FOLDERS = ["Bench Press", "Squat", "Deadlift"]
 
 # Outputs
-OUTPUT_ROOT = os.path.join(VIDEOS_ROOT, "Wrist_BarSpeed_Results")
+OUTPUT_ROOT = r"C:\Users\ajmal\Documents\ELEC49X_Group53_AIweightlift\src\Train_Outputs"
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
 # *** THE MASTER EXCEL FILE ***
@@ -486,7 +486,7 @@ def process_video(video_path, movement_name, out_dir):
         "delta_speed_m_s": delta_m_s,
     }
 
-def run():
+def runManual():
     rows = []
     print("\n==========================================")
     print("    SINGLE VIDEO PROCESSING MODE")
@@ -566,85 +566,84 @@ def run():
         print(f"\n[CRASH] The video caused a crash: {e}")
         traceback.print_exc()
 
+
+def run():
+    print("\n==========================================")
+    print("      BATCH VIDEO PROCESSING MODE")
+    print("==========================================\n")
+
+    # 1. Loop through each movement folder defined in CONFIG
+    for movement_name in MOVEMENT_FOLDERS:
+        folder_path = os.path.join(VIDEOS_ROOT, movement_name)
+
+        if not os.path.exists(folder_path):
+            print(f"[WARN] Folder not found: {folder_path} - Skipping...")
+            continue
+
+        # 2. Find all video files in that folder
+        all_files = os.listdir(folder_path)
+        # Filter for video extensions to avoid trying to process .txt or .DS_Store files
+        video_files = [f for f in all_files if f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))]
+
+        # Sort them naturally (1, 2, ... 10) instead of alphabetically (1, 10, 2)
+        video_files.sort(key=extract_number)
+
+        print(f"\n------------------------------------------------")
+        print(f" Folder: {movement_name} | Found {len(video_files)} videos")
+        print(f"------------------------------------------------")
+
+        # Prepare the output directory for this movement
+        movement_out = os.path.join(OUTPUT_ROOT, movement_name.replace(" ", "_"))
+        os.makedirs(movement_out, exist_ok=True)
+
+        # 3. Process each video in the list
+        for i, video_file in enumerate(video_files):
+            video_path = os.path.join(folder_path, video_file)
+            print(f"\n[{i + 1}/{len(video_files)}] Processing: {video_file} ...")
+
+            try:
+                # Run the processing logic
+                feats = process_video(video_path, movement_name, movement_out)
+
+                if feats:
+                    # --- SAFE EXCEL UPDATE ---
+                    # We load and save the Excel file every time.
+                    # This is slightly slower but ensures that if the script crashes
+                    # on video #50, you don't lose the data for the first 49.
+                    if os.path.exists(MASTER_EXCEL_PATH):
+                        try:
+                            master_df = pd.read_excel(MASTER_EXCEL_PATH)
+                            # Remove any previous entry for this exact video to avoid duplicates
+                            master_df = master_df[master_df["video_name"] != feats["video_name"]]
+                        except Exception:
+                            master_df = pd.DataFrame()
+                    else:
+                        master_df = pd.DataFrame()
+
+                    # Add the new result
+                    new_row_df = pd.DataFrame([feats])
+                    final_df = pd.concat([master_df, new_row_df], ignore_index=True)
+
+                    # Save back to disk
+                    try:
+                        final_df.to_excel(MASTER_EXCEL_PATH, index=False)
+                        print(f"[SAVED] Master Excel updated successfully.")
+                    except PermissionError:
+                        print(f"[ERROR] Could not save to {MASTER_EXCEL_PATH}.")
+                        print("        Please close the Excel file if it is open!")
+                else:
+                    print(f"[SKIP] No valid data found for {video_file}")
+
+            except Exception as e:
+                print(f"[CRASH] Critical error processing {video_file}: {e}")
+                traceback.print_exc()
+
+    print("\n==========================================")
+    print("           BATCH PROCESSING COMPLETE      ")
+    print("==========================================")
+
 # ---------------------------------------------------------
 # Main (Interactive Single Mode)
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    rows = []
-    print("\n==========================================")
-    print("    SINGLE VIDEO PROCESSING MODE")
-    print("==========================================\n")
-
-    # 1. Ask for Movement
-    print("Select Movement Folder:")
-    for i, m in enumerate(MOVEMENT_FOLDERS):
-        print(f"  {i+1}. {m}")
-    
-    try:
-        idx_str = input("\nEnter number (1-3): ")
-        idx = int(idx_str) - 1
-        if idx < 0 or idx >= len(MOVEMENT_FOLDERS):
-            print("Invalid selection.")
-            exit()
-        folder_name = MOVEMENT_FOLDERS[idx]
-    except ValueError:
-        print("Invalid input.")
-        exit()
-
-    # 2. Ask for Video Filename
-    print(f"\nTarget Folder: {folder_name}")
-    target_video = input(f"Enter exact video filename (e.g. '{folder_name} 11.mp4'): ").strip()
-    
-    # Check if file exists
-    folder_path, _ = find_movement_folder(VIDEOS_ROOT, folder_name)
-    video_path = os.path.join(folder_path, target_video)
-    
-    if not os.path.exists(video_path):
-        print(f"\n[ERROR] File not found: {video_path}")
-        print("Please check the name and try again.")
-        exit()
-
-    # 3. Process
-    print(f"\n[INFO] Processing: {target_video} ...")
-    
-    # Use output folder for that movement (so text files land in right place)
-    movement_out = os.path.join(OUTPUT_ROOT, folder_name.replace(" ", "_")) # Fixed Path
-    os.makedirs(movement_out, exist_ok=True)
-    
-    try:
-        feats = process_video(video_path, folder_name, movement_out)
-        
-        if feats:
-            # --- APPEND TO MASTER EXCEL ---
-            # Load existing master if it exists
-            if os.path.exists(MASTER_EXCEL_PATH):
-                try:
-                    master_df = pd.read_excel(MASTER_EXCEL_PATH)
-                    # Remove any previous entry for this exact video to prevent duplicates
-                    master_df = master_df[master_df["video_name"] != feats["video_name"]]
-                except Exception:
-                    master_df = pd.DataFrame()
-            else:
-                master_df = pd.DataFrame()
-
-            # Create DataFrame for current row
-            new_row_df = pd.DataFrame([feats])
-            
-            # Concatenate
-            final_df = pd.concat([master_df, new_row_df], ignore_index=True)
-            
-            # Save back to Master
-            try:
-                final_df.to_excel(MASTER_EXCEL_PATH, index=False)
-                print(f"\n[DONE] Added result to MASTER file: {MASTER_EXCEL_PATH}")
-                print(new_row_df)
-            except PermissionError:
-                print(f"\n[ERROR] Could not save to {MASTER_EXCEL_PATH}. Is it open?")
-                print("Result data (Save manually):", feats)
-
-        else:
-            print("\n[FAILED] Processing completed but no valid data returned.")
-            
-    except Exception as e:
-        print(f"\n[CRASH] The video caused a crash: {e}")
-        traceback.print_exc()
+    runManual()
