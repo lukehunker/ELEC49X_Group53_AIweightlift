@@ -22,7 +22,7 @@ from scipy.stats import skew, kurtosis
 import warnings
 warnings.filterwarnings('ignore')
 
-import openface_utils as ofu
+from . import openface_utils as ofu
 
 
 class OpenFaceExtractor:

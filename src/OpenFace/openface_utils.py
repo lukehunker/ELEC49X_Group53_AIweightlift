@@ -20,7 +20,7 @@ import sys
 
 # Import pose-guided face detection (optional - only if MediaPipe available)
 try:
-    from pose_guided_face_detection import PoseGuidedFaceDetector
+    from .pose_guided_face_detection import PoseGuidedFaceDetector
     POSE_GUIDANCE_AVAILABLE = True
 except ImportError:
     POSE_GUIDANCE_AVAILABLE = False
@@ -179,8 +179,6 @@ def load_landmark_data(csv_path, success_only=True, sample_fps=None, columns_onl
         'x_28', 'y_28',  # Nose tip
         'x_36', 'y_36',  # Left eye corner
         'x_45', 'y_45',  # Right eye corner
-        # Head pose (useful for movement analysis)
-        'pose_Rx', 'pose_Ry', 'pose_Rz',
     ]
     
     # Determine which columns to load
