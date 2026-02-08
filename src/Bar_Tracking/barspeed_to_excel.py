@@ -10,11 +10,11 @@ import pandas as pd
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
-VIDEOS_ROOT = r"C:\Users\ajmal\Documents\ELEC49X_Group53_AIweightlift\lifting_videos\Augmented"
+VIDEOS_ROOT = "../lifting_videos/Augmented/"
 MOVEMENT_FOLDERS = ["Bench Press", "Squat", "Deadlift"]
 
 # Outputs
-OUTPUT_ROOT = r"C:\Users\ajmal\Documents\ELEC49X_Group53_AIweightlift\src\Train_Outputs"
+OUTPUT_ROOT = "Train_Outputs"
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
 # *** THE MASTER EXCEL FILE ***

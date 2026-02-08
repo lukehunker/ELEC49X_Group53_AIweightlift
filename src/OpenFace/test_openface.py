@@ -99,7 +99,7 @@ def run():
     # video_list = ["../lifting_videos/Augmented_h264/Bench_Press_h264/Bench Press 1.mp4"]
 
     # Option 2: Process entire folder (recommended)
-    video_folder = "../lifting_videos/Augmented/Bench_Press"
+    video_folder = "../lifting_videos/Augmented/Bench Press"
 
     openface_df = extract_openface_batch(
         video_folder,
