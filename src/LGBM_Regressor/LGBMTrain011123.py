@@ -24,7 +24,6 @@ def run():
 
     print(f"Loaded {len(df)} rows.")
 
-
     # 2. PREPARE FEATURES
     # ---------------------------------------------------------
     def extract_lift_type(filename):
@@ -38,10 +37,14 @@ def run():
         else:
             return 'Unknown'
 
-
     df['Lift_Type'] = df['video_name'].apply(extract_lift_type)
-    target = 'True_RPE'
-    feature_cols = ['delta_speed_m_s', 'Lift_Type']
+
+    # FIX 1: Change target to match the CSV header
+    target = 'RPE'
+
+    # FIX 2: Add rep_count to the base features
+    feature_cols = ['delta_speed_m_s', 'rep_count', 'Lift_Type']
+
     au_max_cols = [c for c in df.columns if 'max' in c.lower() and 'au' in c.lower() and 'velocity' not in c.lower()]
     feature_cols += au_max_cols
     df = df.dropna(subset=[target])
@@ -168,6 +171,34 @@ def run():
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+    # 6. SAVE FINAL MODEL FOR THE APP
+    # ---------------------------------------------------------
+    import joblib  # Standard tool for saving python objects
+
+    print("\n" + "=" * 60)
+    print("TRAINING FINAL MODEL FOR DEPLOYMENT")
+    print("=" * 60)
+
+    # Train on 100% of the data (X and y) using the best found parameters
+    full_train_data = lgb.Dataset(X, label=y, categorical_feature=['Lift_Type'])
+
+    final_model = lgb.train(
+        best_params,
+        full_train_data,
+        num_boost_round=500  # Matches your plotting rounds
+    )
+
+    # Save the LightGBM Model
+    model_save_path = "../Train_Outputs/lgb_rpe_predictor.txt"
+    final_model.save_model(model_save_path)
+    print(f"✅ Model saved to: {model_save_path}")
+
+    # CRITICAL: Save the LabelEncoder
+    # The app needs this to know that "Bench Press" = 0 (or whatever number it learned)
+    encoder_save_path = "../Train_Outputs/lift_type_encoder.pkl"
+    joblib.dump(le, encoder_save_path)
+    print(f"✅ LabelEncoder saved to: {encoder_save_path}")
 
 if __name__ == "__main__":
     run()
