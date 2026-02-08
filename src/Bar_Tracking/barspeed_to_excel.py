@@ -10,15 +10,15 @@ import pandas as pd
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
-VIDEOS_ROOT = "../lifting_videos/Augmented/"
+VIDEOS_ROOT = "../../lifting_videos/Augmented/"
 MOVEMENT_FOLDERS = ["Bench Press", "Squat", "Deadlift"]
 
 # Outputs
-OUTPUT_ROOT = "Train_Outputs"
+OUTPUT_ROOT = "../Train_Outputs"
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
 # *** THE MASTER EXCEL FILE ***
-MASTER_EXCEL_PATH = os.path.join(OUTPUT_ROOT, "Master_Results.xlsx")
+MASTER_EXCEL_PATH = os.path.join(OUTPUT_ROOT, "barSpeed.xlsx")
 
 print(f"[INFO] Videos root: {VIDEOS_ROOT}")
 print(f"[INFO] Output root: {OUTPUT_ROOT}")
@@ -465,7 +465,7 @@ def process_video(video_path, movement_name, out_dir):
 
     first_m_s = speeds[0][2]
     last_m_s = speeds[-1][2]
-    delta_m_s = float(last_m_s - first_m_s)
+    delta_m_s = float(first_m_s - last_m_s)
 
     txt_path = os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_barspeed.txt")
     with open(txt_path, "w") as f:
@@ -646,4 +646,5 @@ def run():
 # Main (Interactive Single Mode)
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    runManual()
+    #runManual()
+    run()
