@@ -33,7 +33,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 
 # Paths
+<<<<<<< HEAD
 OPENFACE_BIN = os.path.join(REPO_ROOT, "OpenFace", "build", "bin", "FeatureExtraction")
+=======
+OPENFACE_BIN = os.path.join(REPO_ROOT, "OpenFace", "build", "bin", "FeatureExtraction.exe")
+VIDEOS_DIR = os.path.join(REPO_ROOT, "lifting_videos")
+>>>>>>> 5d2e4e4e7cab8171c0b52e8edbf229c1a096473e
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output", "openface")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
