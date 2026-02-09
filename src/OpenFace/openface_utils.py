@@ -30,12 +30,10 @@ except ImportError:
 # CONFIGURATION
 # =========================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Now in src/OpenFace/, need to go up 2 levels to reach repo root
 REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 
 # Paths
 OPENFACE_BIN = os.path.join(REPO_ROOT, "OpenFace", "build", "bin", "FeatureExtraction")
-VIDEOS_DIR = os.path.join(REPO_ROOT, "lifting_videos")
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output", "openface")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

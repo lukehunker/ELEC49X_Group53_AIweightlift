@@ -248,7 +248,7 @@ The script will:
     missing_videos = identify_missing_videos(features_df)
     
     if len(missing_videos) == 0:
-        print("\n✓ No missing videos found! All videos processed successfully.")
+        print("\nNo missing videos found! All videos processed successfully.")
         return
     
     # Impute missing features
@@ -265,12 +265,12 @@ The script will:
     
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     imputed_df.to_csv(args.output, index=False)
-    print(f"\n✓ Imputed features saved to: {args.output}")
+    print(f"\nImputed features saved to: {args.output}")
     
     if args.summary:
         os.makedirs(os.path.dirname(args.summary), exist_ok=True)
         summary_df.to_csv(args.summary, index=False)
-        print(f"✓ Imputation summary saved to: {args.summary}")
+        print(f"Imputation summary saved to: {args.summary}")
     
     # Final summary
     print("\n" + "="*80)
@@ -281,8 +281,8 @@ The script will:
     print(f"  Videos with imputed features: {len(summary_df)}")
     print(f"  Total videos in output: {len(imputed_df)}")
     print(f"\nAll rows are included in the final CSV:")
-    print(f"  ✓ Successfully processed videos (real features)")
-    print(f"  ✓ Imputed videos (generated features from averaging)")
+    print(f"  Successfully processed videos (real features)")
+    print(f"  Imputed videos (generated features from averaging)")
     
     if len(summary_df) > 0:
         print(f"\nImputation breakdown by exercise:")
@@ -295,7 +295,7 @@ The script will:
             count = len(summary_df[summary_df['imputation_method'] == method])
             print(f"  {method}: {count} videos")
     
-    print("\n✓ Ready for LGBM training!")
+    print("\n Ready for LGBM training!")
     print(f"\nNote: Check 'imputed' column in output CSV to identify which videos")
     print(f"      had features generated vs. extracted from actual video analysis.")
 
