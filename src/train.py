@@ -6,5 +6,5 @@ import LGBM_Regressor.LGBMTrain011123 as LGBM
 if __name__ == "__main__":
     BST.run()
     OF.run()
-    M.createMasterResults()
+    M.run()
     LGBM.run()
