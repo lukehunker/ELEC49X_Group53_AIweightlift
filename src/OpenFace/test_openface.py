@@ -99,11 +99,11 @@ def run():
     # video_list = ["../lifting_videos/Augmented_h264/Bench_Press_h264/Bench Press 1.mp4"]
 
     # Option 2: Process entire folder (recommended)
-    video_folder = "../../lifting_videos/Augmented/"
+    video_folder = "../lifting_videos/Augmented/"
 
     openface_df = extract_openface_batch(
         video_folder,
-        rpe_labels_csv="../dataset_labelled.csv",
+        rpe_labels_csv="../lifting_videos/Augmented/dataset_labelled.csv",
         output_csv="../Train_Outputs/openface_features_all.csv"  # Renamed for clarity
     )
 
