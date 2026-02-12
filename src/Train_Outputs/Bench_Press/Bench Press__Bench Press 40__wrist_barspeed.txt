@@ -1,0 +1,10 @@
+Video: Bench Press 40
+Movement: Bench Press
+Rep pattern: TBT
+Detected reps: 3
+
+Rep 1: 1.40 seconds
+Rep 2: 2.08 seconds
+Rep 3: 3.37 seconds
+
+Fatigue (Last - First): 1.97s
