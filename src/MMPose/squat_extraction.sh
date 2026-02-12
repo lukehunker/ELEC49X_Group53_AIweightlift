@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SQUAT_DIR="/home/hys/ELEC49X_Group53_AIweightlift/lifting_videos/Augmented/Squat"
+SQUAT_DIR="../../lifting_videos/Augmented/Squat"
 
 rm -f squat_outputs.txt
 

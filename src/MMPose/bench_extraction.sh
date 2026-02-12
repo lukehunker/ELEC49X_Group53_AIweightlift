@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-BENCH_DIR="/home/hys/ELEC49X_Group53_AIweightlift/lifting_videos/Augmented/Bench Press"
+BENCH_DIR="../../lifting_videos/Augmented/Bench Press"
 
 rm -f bench_outputs.txt
 

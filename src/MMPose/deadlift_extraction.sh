@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DEADLIFT_DIR="/home/hys/ELEC49X_Group53_AIweightlift/lifting_videos/Augmented/Deadlift"
+DEADLIFT_DIR="../../lifting_videos/Augmented/Deadlift"
 
 rm -f deadlift_outputs.txt
 
