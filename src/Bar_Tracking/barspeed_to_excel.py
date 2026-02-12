@@ -24,6 +24,7 @@ print(f"[INFO] Videos root: {VIDEOS_ROOT}")
 print(f"[INFO] Output root: {OUTPUT_ROOT}")
 print(f"[INFO] Master Excel: {MASTER_EXCEL_PATH}")
 
+# Note: Pixels per CM is less critical for time, but kept for depth calcs
 PIXELS_PER_CM = 10.0
 
 # ---------------------------------------------------------
@@ -51,7 +52,8 @@ CLUSTER_OFFSETS = [(-8, 0), (8, 0), (0, -8), (0, 8), (0, 0), (-6, -6), (6, 6)]
 # ---------------------------------------------------------
 def extract_number(filename: str) -> int:
     m = re.search(r"\d+", filename)
-    return int(m.group()) if m else 10**9
+    return int(m.group()) if m else 10 ** 9
+
 
 def moving_average(x, window=7):
     x = np.asarray(x, dtype=float)
@@ -62,6 +64,7 @@ def moving_average(x, window=7):
     x_interp = np.interp(idx, idx[mask], x[mask])
     kernel = np.ones(window) / window
     return np.convolve(x_interp, kernel, mode="same")
+
 
 def _flatten_bbox_candidate(b):
     if b is None: return None
@@ -85,9 +88,12 @@ def _flatten_bbox_candidate(b):
     for i in range(4):
         v = b[i]
         if isinstance(v, (list, tuple, dict)): return None
-        try: out.append(float(v))
-        except Exception: return None
+        try:
+            out.append(float(v))
+        except Exception:
+            return None
     return out
+
 
 def _bbox_to_xyxy(b):
     flat = _flatten_bbox_candidate(b)
@@ -95,6 +101,7 @@ def _bbox_to_xyxy(b):
     x1, y1, a, d = flat
     if a > x1 and d > y1: return [x1, y1, a, d]
     return [x1, y1, x1 + a, y1 + d]
+
 
 def iou_xyxy(b1, b2):
     if b1 is None or b2 is None: return 0.0
@@ -108,9 +115,11 @@ def iou_xyxy(b1, b2):
     denom = a1 + a2 - inter
     return float(inter / denom) if denom > 0 else 0.0
 
+
 def seed_cluster(cx, cy):
     pts = [[cx + dx, cy + dy] for dx, dy in CLUSTER_OFFSETS]
     return np.array(pts, dtype=np.float32).reshape(-1, 1, 2)
+
 
 def run_pose_on_frame(frame, inferencer, conf_thr):
     gen = inferencer(frame, return_vis=False, kpt_thr=conf_thr)
@@ -121,6 +130,7 @@ def run_pose_on_frame(frame, inferencer, conf_thr):
     preds_all = result.get("predictions", None)
     if not preds_all or not preds_all[0]: return []
     return preds_all[0]
+
 
 def score_person_for_lifter(person, frame_w, frame_h):
     ksc = np.array(person.get("keypoint_scores", []), dtype=float)
@@ -141,6 +151,7 @@ def score_person_for_lifter(person, frame_w, frame_h):
         wrist_bonus = float(ksc[LEFT_WRIST_IDX] + ksc[RIGHT_WRIST_IDX])
     return area * (1.5 + wrist_bonus) * (1.0 / (1.0 + 2.0 * center_penalty))
 
+
 def seed_from_plate(frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (9, 9), 2.0)
@@ -153,6 +164,7 @@ def seed_from_plate(frame):
     circles = sorted(circles, key=lambda c: c[2], reverse=True)
     x, y, r = circles[0]
     return ("plate", (float(x), float(y)), None)
+
 
 def choose_lifter_and_wrist_seed(pose_frames, frame_w, frame_h, inferencer, conf_thr):
     chosen_bbox = None
@@ -186,10 +198,12 @@ def choose_lifter_and_wrist_seed(pose_frames, frame_w, frame_h, inferencer, conf
         plate = seed_from_plate(pose_frames[0])
         if plate is None: return None
         return plate
+
     def quality(pts, scores):
         if not pts: return 0.0, None
         arr = np.stack(pts, axis=0)
         return len(pts) * float(np.mean(scores)), arr
+
     lq, la = quality(left_pts, left_scores)
     rq, ra = quality(right_pts, right_scores)
     if rq > lq:
@@ -200,6 +214,7 @@ def choose_lifter_and_wrist_seed(pose_frames, frame_w, frame_h, inferencer, conf
         arr = la if la is not None else ra
     center = arr.mean(axis=0)
     return (wrist_side, (float(center[0]), float(center[1])), chosen_bbox)
+
 
 def pick_person_by_bbox(persons, prev_bbox):
     if not persons: return None, None
@@ -224,147 +239,140 @@ def pick_person_by_bbox(persons, prev_bbox):
             best_bbox = b
     return best, best_bbox
 
+
 def get_pose_wrist(person, prefer_side, conf_thr):
     if person is None: return None
     kpts = np.array(person.get("keypoints", []), dtype=float)
     ksc = np.array(person.get("keypoint_scores", []), dtype=float)
     if len(kpts) <= RIGHT_WRIST_IDX or len(ksc) <= RIGHT_WRIST_IDX: return None
-    if prefer_side == "left": cand = [LEFT_WRIST_IDX, RIGHT_WRIST_IDX]
-    elif prefer_side == "right": cand = [RIGHT_WRIST_IDX, LEFT_WRIST_IDX]
-    else: cand = [LEFT_WRIST_IDX, RIGHT_WRIST_IDX]
+    if prefer_side == "left":
+        cand = [LEFT_WRIST_IDX, RIGHT_WRIST_IDX]
+    elif prefer_side == "right":
+        cand = [RIGHT_WRIST_IDX, LEFT_WRIST_IDX]
+    else:
+        cand = [LEFT_WRIST_IDX, RIGHT_WRIST_IDX]
     for idx in cand:
         if ksc[idx] >= conf_thr:
             return (float(kpts[idx][0]), float(kpts[idx][1]), float(ksc[idx]))
     return None
 
+
 # ---------------------------------------------------------
 # LOGIC: State Machine & Speed
 # ---------------------------------------------------------
 def detect_reps_state_machine_auto(
-    y_smooth,
-    fps,
-    top_margin=0.40,
-    bottom_margin=0.40,
-    min_rep_seconds=0.4,
-    force_pattern=None,
+        y_smooth,
+        fps,
+        top_margin=0.40,
+        bottom_margin=0.40,
+        min_rep_seconds=0.4,
+        force_pattern=None,
 ):
-    safe_reps = []
-    safe_thr = {"top_y": 0, "bottom_y": 0, "rom": 0, "thr_top": 0, "thr_bottom": 0}
-
-    try:
-        y = np.asarray(y_smooth, dtype=float)
-        valid = y[np.isfinite(y)]
-        if valid.size < 5: return safe_reps, "UNKNOWN", safe_thr
-
-        top_y = np.percentile(valid, 5)
-        bottom_y = np.percentile(valid, 95)
-        rom = bottom_y - top_y
-        safe_thr.update({"top_y": float(top_y), "bottom_y": float(bottom_y), "rom": float(rom)})
-
-        if rom < 5.0: return safe_reps, "STATIONARY", safe_thr
-
-        if force_pattern in ("TBT", "BTB"):
-            pattern = force_pattern
-        else:
-            first_idx = int(np.where(np.isfinite(y))[0][0])
-            y0 = y[first_idx]
-            start_at_bottom = abs(y0 - bottom_y) < abs(y0 - top_y)
-            pattern = "BTB" if start_at_bottom else "TBT"
-
-        if pattern == "BTB":
-            # DEADLIFT: Top > 35%, Bottom > 50% (halfway point)
-            thr_top = top_y + 0.35 * rom      
-            thr_bottom = bottom_y - 0.50 * rom 
-        else:
-            # SQUAT/BENCH
-            thr_top = top_y + top_margin * rom
-            thr_bottom = bottom_y - bottom_margin * rom
-            
-        safe_thr.update({"thr_top": float(thr_top), "thr_bottom": float(thr_bottom)})
-        min_rep_frames = int(min_rep_seconds * fps)
-
-        reps = []
-        if pattern == "TBT": # Squat/Bench
-            state = "search_top"
-            last_top_idx = None
-            bottom_idx = None
-            for i, yi in enumerate(y):
-                if not np.isfinite(yi): continue
-                if state == "search_top":
-                    if yi <= thr_top:
-                        last_top_idx = i
-                        state = "going_down"
-                elif state == "going_down":
-                    if yi < y[last_top_idx]: last_top_idx = i
-                    if yi >= thr_bottom:
-                        bottom_idx = i
-                        state = "going_up"
-                elif state == "going_up":
-                    if yi > y[bottom_idx]: bottom_idx = i
-                    if yi <= thr_top:
-                        end_top_idx = i
-                        if (end_top_idx - last_top_idx) >= min_rep_frames:
-                            reps.append((last_top_idx, bottom_idx, end_top_idx))
-                        last_top_idx = end_top_idx
-                        bottom_idx = None
-                        state = "going_down"
-        else: # Deadlift (BTB)
-            state = "search_bottom"
-            last_bottom_idx = None
-            top_idx = None
-            for i, yi in enumerate(y):
-                if not np.isfinite(yi): continue
-                if state == "search_bottom":
-                    if yi >= thr_bottom:
-                        last_bottom_idx = i
-                        state = "going_up"
-                elif state == "going_up":
-                    if yi > y[last_bottom_idx]: last_bottom_idx = i
-                    if yi <= thr_top:
-                        top_idx = i
-                        state = "going_down"
-                elif state == "going_down":
-                    if yi < y[top_idx]: top_idx = i
-                    if yi >= thr_bottom:
-                        end_bottom_idx = i
-                        if (end_bottom_idx - last_bottom_idx) >= min_rep_frames:
-                            reps.append((last_bottom_idx, top_idx, end_bottom_idx))
-                        last_bottom_idx = end_bottom_idx
-                        top_idx = None
-                        state = "going_up"
-
-        return reps, pattern, safe_thr
-    except Exception as e:
-        print(f"[ERROR] Crash in detect_reps: {e}")
-        return safe_reps, "ERROR", safe_thr
-
-def compute_rep_speeds(y_smooth, fps, reps, pattern):
+    reps = []
     y = np.asarray(y_smooth, dtype=float)
-    speeds = []
-    for triple in reps:
+
+    # 1. Determine Movement Pattern
+    valid = y[np.isfinite(y)]
+    top_y = np.percentile(valid, 5)
+    bottom_y = np.percentile(valid, 95)
+    rom = bottom_y - top_y
+
+    if force_pattern in ("TBT", "BTB"):
+        pattern = force_pattern
+    else:
+        pattern = "BTB" if abs(y[0] - bottom_y) < abs(y[0] - top_y) else "TBT"
+
+    # 2. Find Candidate Bottoms (Local Peaks)
+    from scipy.signal import find_peaks
+    # We look for peaks (bottoms) that are at least 60% into the total ROM
+    height_thresh = top_y + 0.60 * rom if pattern == "TBT" else None
+    if pattern == "BTB":  # Deadlift peaks are "highs" (min Y)
+        peaks, _ = find_peaks(-y, height=-(bottom_y - 0.60 * rom), distance=int(fps * min_rep_seconds))
+    else:
+        peaks, _ = find_peaks(y, height=height_thresh, distance=int(fps * min_rep_seconds))
+
+    # 3. For each peak, find the true start and true end
+    for p in peaks:
+        # --- FIND START (Look Back) ---
+        # Look back up to 4 seconds. Find the last point where the bar was "Stationary"
+        # at the top before it started moving towards the peak.
+        search_start = max(0, p - int(4.0 * fps))
+        pre_snippet = y[search_start:p]
+
         if pattern == "TBT":
+            # Start is the frame where Y was at its minimum (highest point)
+            # closest to the descent.
+            start_idx = search_start + np.argmin(pre_snippet)
+        else:
+            # Deadlift: Start is the frame where Y was maximum (on floor)
+            start_idx = search_start + np.argmax(pre_snippet)
+
+        # --- FIND END (Look Forward) ---
+        # Look forward up to 4 seconds. Find the first point where the bar returns
+        # to a stationary "Top" position.
+        search_end = min(len(y), p + int(4.0 * fps))
+        post_snippet = y[p:search_end]
+
+        if pattern == "TBT":
+            # End is the frame where Y is at its minimum (lockout)
+            end_idx = p + np.argmin(post_snippet)
+        else:
+            # Deadlift: End is the frame where Y is at its maximum (floor)
+            end_idx = p + np.argmax(post_snippet)
+
+        # --- VALIDATION ---
+        # Ensure the rep has enough movement and duration
+        duration = (end_idx - start_idx) / fps
+        if duration >= min_rep_seconds:
+            # Avoid duplicate or overlapping reps
+            if not reps or start_idx > reps[-1][2]:
+                reps.append((start_idx, p, end_idx))
+
+    safe_thr = {"top_y": float(top_y), "bottom_y": float(bottom_y), "rom": float(rom)}
+    return reps, pattern, safe_thr
+
+
+# --- UPDATED FUNCTION FOR TIME DURATION ---
+def compute_rep_durations(y_smooth, fps, reps, pattern):
+    """
+    Calculates the duration (seconds) of the Concentric (lifting) phase.
+    Returns a list of tuples: (duration_seconds, depth_pixels)
+    """
+    y = np.asarray(y_smooth, dtype=float)
+    stats = []
+
+    for triple in reps:
+        if pattern == "TBT":  # Squat/Bench (Top -> Bottom -> Top)
             t1, b, t2 = triple
+
+            # DURATION CALCULATION:
+            # Concentric Only (Pushing up): (t2 - b) / fps
+            # Full Rep (Down + Up): (t2 - t1) / fps
+
+            # Using Concentric as it is best for fatigue tracking
+            duration = (t2 - b) / fps
+
             depth_px = y[b] - min(y[t1], y[t2])
-            ascent_time = (t2 - b) / fps
-        else: 
+        else:  # Deadlift (Bottom -> Top -> Bottom)
             b1, t, b2 = triple
+
+            # DURATION CALCULATION:
+            # Concentric Only (Pulling up): (t - b1) / fps
+
+            duration = (t - b1) / fps
+
             depth_px = max(y[b1], y[b2]) - y[t]
-            ascent_time = (t - b1) / fps
 
-        if ascent_time <= 0: continue
-        avg_px_s = depth_px / ascent_time
-        avg_m_s = (avg_px_s / PIXELS_PER_CM) / 100.0
+        stats.append((float(duration), float(depth_px)))
 
-        if avg_m_s > 3.0: # Filter glitches
-            print(f"[WARN] Ignored glitch rep with speed {avg_m_s:.2f} m/s")
-            continue
-        speeds.append((float(avg_px_s), float(avg_px_s/PIXELS_PER_CM), float(avg_m_s)))
-    return speeds
+    return stats
+
 
 def find_movement_folder(root, desired_name):
     folder_path = os.path.join(root, desired_name)
     if os.path.isdir(folder_path): return folder_path, desired_name
     return None, None
+
 
 def process_video(video_path, movement_name, out_dir):
     cap_pose = cv2.VideoCapture(video_path)
@@ -394,7 +402,7 @@ def process_video(video_path, movement_name, out_dir):
     ret, first_frame = cap.read()
     if not ret: return None
     old_gray = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
-    
+
     base_name = os.path.splitext(os.path.basename(video_path))[0]
     vis_path = os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_vis.mp4")
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -409,7 +417,7 @@ def process_video(video_path, movement_name, out_dir):
     while True:
         ret, frame = cap.read()
         if not ret: break
-        
+
         # Print dots to show it is alive
         if frame_idx % 30 == 0:
             print(".", end="", flush=True)
@@ -438,8 +446,8 @@ def process_video(video_path, movement_name, out_dir):
             pw = get_pose_wrist(chosen_person, wrist_side, CONF_THR)
             if pw:
                 px, py, pconf = pw
-                if np.isfinite(ys[-1]) and np.hypot(px-xs[-1], py-ys[-1]) > MAX_RESEED_DIST_PX and lost_counter < 2:
-                    pass 
+                if np.isfinite(ys[-1]) and np.hypot(px - xs[-1], py - ys[-1]) > MAX_RESEED_DIST_PX and lost_counter < 2:
+                    pass
                 else:
                     p0 = seed_cluster(px, py)
                     ys[-1] = float(py)
@@ -456,35 +464,46 @@ def process_video(video_path, movement_name, out_dir):
     force = "BTB" if movement_name.lower() == "deadlift" else None
 
     reps, pattern, thr = detect_reps_state_machine_auto(y_smooth, fps, force_pattern=force)
-    speeds = compute_rep_speeds(y_smooth, fps, reps, pattern)
-    
-    if len(speeds) < len(reps): reps = reps[:len(speeds)]
+
+    # --- CHANGED TO DURATION CALCULATION ---
+    # stats is a list of tuples: (duration_seconds, depth_pixels)
+    stats = compute_rep_durations(y_smooth, fps, reps, pattern)
+
+    if len(stats) < len(reps): reps = reps[:len(stats)]
     if len(reps) < 1:
         print(f"[WARN] No valid reps for {base_name}")
         return None
 
-    first_m_s = speeds[0][2]
-    last_m_s = speeds[-1][2]
-    delta_m_s = float(first_m_s - last_m_s)
+    # Extract just the durations
+    durations = [s[0] for s in stats]
+
+    first_rep_duration = durations[0]
+    last_rep_duration = durations[-1]
+
+    # FATIGUE: Last Rep Time - First Rep Time
+    # Positive result means you got SLOWER (Last rep took longer)
+    fatigue_seconds = last_rep_duration - first_rep_duration
 
     txt_path = os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_barspeed.txt")
     with open(txt_path, "w") as f:
         f.write(f"Video: {base_name}\nMovement: {movement_name}\nRep pattern: {pattern}\n")
         f.write(f"Detected reps: {len(reps)}\n\n")
-        for i, (triple, (px_s, cm_s, m_s)) in enumerate(zip(reps, speeds), 1):
-            f.write(f"Rep {i}: Speed {m_s:.4f} m/s\n")
-        f.write(f"\nDelta speed: {delta_m_s:.6f}\n")
-    
+        for i, dur in enumerate(durations, 1):
+            f.write(f"Rep {i}: {dur:.2f} seconds\n")
+        f.write(f"\nFatigue (Last - First): {fatigue_seconds:.2f}s\n")
+
     np.save(os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_y.npy"), ys)
-    print(f"\n[OK] {movement_name} | {base_name}: reps={len(reps)}, first={first_m_s:.3f}, last={last_m_s:.3f}, Δv={delta_m_s:.4f}")
+    print(
+        f"\n[OK] {movement_name} | {base_name}: reps={len(reps)}, first={first_rep_duration:.2f}s, last={last_rep_duration:.2f}s, fatigue={fatigue_seconds:.2f}s")
 
     return {
         "video_name": os.path.basename(video_path),
         "rep_count": len(reps),
-        "first_rep_speed_m_s": first_m_s,
-        "last_rep_speed_m_s": last_m_s,
-        "delta_speed_m_s": delta_m_s,
+        "first_rep_duration_s": first_rep_duration,
+        "last_rep_duration_s": last_rep_duration,
+        "fatigue_s": fatigue_seconds,
     }
+
 
 def runManual():
     rows = []
@@ -642,9 +661,10 @@ def run():
     print("           BATCH PROCESSING COMPLETE      ")
     print("==========================================")
 
+
 # ---------------------------------------------------------
 # Main (Interactive Single Mode)
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    #runManual()
-    run()
+    runManual()
+    #run()
