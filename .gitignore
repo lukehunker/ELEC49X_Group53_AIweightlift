@@ -29,6 +29,10 @@ __pycache__/
 *~
 .DS_Store
 
+# Windows Zone.Identifier files (from WSL/Windows file transfers)
+*:Zone.Identifier
+*.Identifier
+
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 

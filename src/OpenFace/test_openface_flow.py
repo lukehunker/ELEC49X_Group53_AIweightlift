@@ -34,6 +34,122 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from OpenFace.openface_feature_extractor import OpenFaceExtractor
 import OpenFace.openface_utils as ofu
 from impute_missing_features import load_rpe_labels, impute_by_rpe_average, identify_missing_videos
+import cv2
+import numpy as np
+
+
+def create_visualization_video(video_path, csv_path, output_path):
+    """
+    Create a visualization video with OpenFace landmarks overlaid.
+    Standalone function - doesn't affect the core extractor.
+    
+    Args:
+        video_path: Path to input video (pose-guided video)
+        csv_path: Path to OpenFace CSV output with landmarks
+        output_path: Path to save visualization video
+    """
+    print(f"\n{'='*80}")
+    print("CREATING VISUALIZATION VIDEO")
+    print(f"{'='*80}")
+    
+    # Load landmark data
+    if not os.path.exists(csv_path):
+        print(f"ERROR: CSV file not found: {csv_path}")
+        return None
+    
+    df = pd.read_csv(csv_path)
+    
+    # Open video
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"ERROR: Could not open video: {video_path}")
+        return None
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    print(f"Input: {os.path.basename(video_path)}")
+    print(f"Frames: {total_frames}, FPS: {fps:.1f}, Resolution: {width}x{height}")
+    print(f"Output: {output_path}")
+    
+    # Create video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not writer.isOpened():
+        print(f"ERROR: Could not create output video writer")
+        cap.release()
+        return None
+    
+    frame_idx = 0
+    frames_with_landmarks = 0
+    
+    print("\nProcessing frames...")
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Find corresponding row in CSV
+        if frame_idx < len(df):
+            row = df.iloc[frame_idx]
+            success = row.get('success', 0) == 1
+            confidence = row.get('confidence', 0)
+            
+            # Draw detection status
+            status_text = f"Frame {frame_idx}/{total_frames}"
+            conf_text = f"Detection: {'SUCCESS' if success else 'FAILED'} (conf: {confidence:.2f})"
+            
+            cv2.putText(frame, status_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            cv2.putText(frame, conf_text, (10, 60),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, 
+                       (0, 255, 0) if success else (0, 0, 255), 2)
+            
+            if success:
+                frames_with_landmarks += 1
+                
+                # Draw 68 facial landmarks
+                for i in range(68):
+                    x_col = f'x_{i}'
+                    y_col = f'y_{i}'
+                    if x_col in row and y_col in row:
+                        x = int(row[x_col])
+                        y = int(row[y_col])
+                        cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
+                
+                # Draw AU intensities
+                y_offset = 90
+                for au in ['AU04_r', 'AU06_r', 'AU12_r', 'AU07_r']:
+                    if au in row:
+                        au_val = row[au]
+                        au_text = f"{au}: {au_val:.2f}"
+                        cv2.putText(frame, au_text, (10, y_offset),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                        y_offset += 25
+        
+        writer.write(frame)
+        
+        # Progress indicator
+        if frame_idx % 30 == 0:
+            print(".", end="", flush=True)
+        
+        frame_idx += 1
+    
+    cap.release()
+    writer.release()
+    
+    print(f"\n\n{'='*80}")
+    print("VISUALIZATION COMPLETE")
+    print(f"{'='*80}")
+    print(f"Processed: {frame_idx} frames")
+    print(f"Landmarks drawn: {frames_with_landmarks} frames")
+    print(f"Saved to: {output_path}")
+    print(f"\nDownload this file to view the visualization!")
+    
+    return output_path
 
 
 def test_single_video(video_path, verbose=True, visualize=False):
@@ -44,7 +160,7 @@ def test_single_video(video_path, verbose=True, visualize=False):
         load_minimal_columns=True,  # Load only important AU columns
         sample_fps=10,              # Process every 3rd frame for speed
         verbose=verbose,
-        visualize=visualize         # Show video with landmarks
+        visualize=False             # Don't use built-in visualization
     )
     
     try:
@@ -60,6 +176,35 @@ def test_single_video(video_path, verbose=True, visualize=False):
             print(f"  Detection: {detection_count}/{total_frames} frames ({detection_rate*100:.1f}%)")
             print(f"  Confidence: {features.get('confidence_mean', 0):.3f}")
             print(f"  Sample AUs: AU04={features.get('AU04_max', 0):.3f}, AU12={features.get('AU12_max', 0):.3f}")
+        
+        # Create standalone visualization if requested
+        if visualize:
+            # Find the pose-guided video and CSV that were created
+            # Look in output/openface for files matching this video
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            openface_output = os.path.join(project_root, 'output', 'openface')
+            
+            pose_guided_video = os.path.join(openface_output, f"{base_name}_pose_guided.mp4")
+            
+            # Find the actual CSV using glob since it might have cached a different file
+            import glob
+            csv_pattern = os.path.join(openface_output, f"{base_name}*_pose_guided.csv")
+            csv_files = glob.glob(csv_pattern)
+            
+            if csv_files:
+                openface_csv = csv_files[0]  # Use the first match
+            else:
+                openface_csv = os.path.join(openface_output, f"{base_name}_pose_guided.csv")
+            
+            if os.path.exists(pose_guided_video) and os.path.exists(openface_csv):
+                vis_output = os.path.join(openface_output, f"{base_name}_landmarks_visualized.mp4")
+                create_visualization_video(pose_guided_video, openface_csv, vis_output)
+            else:
+                print(f"\nWARNING: Could not create visualization")
+                print(f"  Pose-guided video: {pose_guided_video} (exists: {os.path.exists(pose_guided_video)})")
+                print(f"  OpenFace CSV: {openface_csv} (exists: {os.path.exists(openface_csv)})")
         
         # Return all features (excluding metadata) for CSV export
         result = {'video_name': os.path.basename(video_path)}
@@ -258,15 +403,37 @@ Outputs:
     print(f"{'='*80}")
     
     if not os.path.exists(args.video_dir):
-        print(f"ERROR: Directory not found: {args.video_dir}")
+        print(f"ERROR: Path not found: {args.video_dir}")
         return
     
-    # Extract features from all videos
-    output_csv = test_video_directory(args.video_dir, args.max_videos, args.pattern, args.recursive, args.visualize)
-    
-    # Always run imputation
-    if output_csv:
-        run_imputation(output_csv, args.rpe_labels)
+    # Check if path is a file or directory
+    if os.path.isfile(args.video_dir):
+        # Single file mode
+        print(f"\nProcessing single video file: {os.path.basename(args.video_dir)}\n")
+        result = test_single_video(args.video_dir, verbose=True, visualize=args.visualize)
+        
+        # Save to CSV
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        output_path = os.path.join(project_root, 'output', 'openface_max_features.csv')
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        df = pd.DataFrame([result])
+        df.to_csv(output_path, index=False)
+        
+        print(f"\n{'='*80}")
+        print("EXTRACTION COMPLETE")
+        print(f"{'='*80}")
+        print(f"Features saved to: {output_path}")
+        
+        # Run imputation
+        run_imputation(output_path, args.rpe_labels)
+    else:
+        # Directory mode (original behavior)
+        output_csv = test_video_directory(args.video_dir, args.max_videos, args.pattern, args.recursive, args.visualize)
+        
+        # Always run imputation
+        if output_csv:
+            run_imputation(output_csv, args.rpe_labels)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,16 @@
+Deadlift 1 
+Deadlift 1 --- DEBUG: Detected reps (hip height for deadlift) ---
+Deadlift 1 JSON: Deadlift 1_keypoints.json
+Deadlift 1 Bottom frames: [7, 56, 174, 248, 284, 325, 398, 474, 504]
+Deadlift 1 DROP Rep 0: frames 7->56 (49 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 1: frames 56->174 (118 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 2: frames 174->248 (74 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 3: frames 248->284 (36 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 4: frames 284->325 (41 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 5: frames 325->398 (73 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 6: frames 398->474 (76 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 DROP Rep 7: frames 474->504 (30 frames), top=0.000, bottom=-0.000, drop=0.000
+Deadlift 1 Max drop=0.000 | threshold=0.250
+Deadlift 1 -----------------------------------------------
+Deadlift 1 
+Deadlift 1 SKIP: only 0 valid rep(s) detected.
