@@ -32,26 +32,24 @@ class OpenFaceExtractor:
     
     # Key Action Units for physical exertion
     EXERTION_AUS = [
-        'AU04_r',  # Brow Lowerer (concentration/strain)
-        'AU06_r',  # Cheek Raiser (squinting/strain)
-        'AU07_r',  # Lid Tightener (strain)
-        'AU09_r',  # Nose Wrinkler (strain)
-        'AU10_r',  # Upper Lip Raiser (strain)
-        'AU12_r',  # Lip Corner Puller (grimace)
-        'AU17_r',  # Chin Raiser (strain)
-        'AU20_r',  # Lip Stretcher (strain)
-        'AU25_r',  # Lips Part (breathing/exertion)
-        'AU26_r',  # Jaw Drop (breathing/exertion)
+        'AU04_r',
+        'AU06_r',
+        'AU07_r',
+        'AU09_r',
+        'AU10_r',
+        'AU12_r',
+        'AU17_r',
+        'AU20_r',
+        'AU25_r',
+        'AU26_r',
     ]
     
-    # All AU intensity columns
     ALL_AU_INTENSITY = [
         'AU01_r', 'AU02_r', 'AU04_r', 'AU05_r', 'AU06_r', 'AU07_r',
         'AU09_r', 'AU10_r', 'AU12_r', 'AU14_r', 'AU15_r', 'AU17_r',
         'AU20_r', 'AU23_r', 'AU25_r', 'AU26_r', 'AU45_r'
     ]
     
-    # AU classification columns (presence/absence)
     ALL_AU_CLASSIFICATION = [
         'AU01_c', 'AU02_c', 'AU04_c', 'AU05_c', 'AU06_c', 'AU07_c',
         'AU09_c', 'AU10_c', 'AU12_c', 'AU14_c', 'AU15_c', 'AU17_c',
@@ -59,20 +57,6 @@ class OpenFaceExtractor:
     ]
     
     def __init__(self, verbose=True, use_pose_guidance=True, sample_fps=10, load_minimal_columns=True, max_only=True, visualize=False):
-        """
-        Initialize the OpenFace feature extractor.
-        
-        Args:
-            verbose: Print progress messages
-            use_pose_guidance: Use MediaPipe to crop to face (improves accuracy)
-            sample_fps: Target FPS for frame sampling (default: 10)
-                       Lower = faster processing, less data
-                       Higher = more data, slower processing
-                       Set to None to use all frames
-            load_minimal_columns: Only load RPE-relevant columns (faster)
-            max_only: If True, extract only max/peak features (for RPE prediction)
-            visualize: Show video with landmarks drawn in real-time
-        """
         self.verbose = verbose
         self.use_pose_guidance = use_pose_guidance
         self.sample_fps = sample_fps
@@ -82,12 +66,10 @@ class OpenFaceExtractor:
         self._check_openface()
     
     def _check_openface(self):
-        """Verify OpenFace binary is available."""
         if not ofu.check_openface_binary():
             raise RuntimeError("OpenFace binary not found. Cannot extract features.")
     
     def _log(self, message):
-        """Print message if verbose mode enabled."""
         if self.verbose:
             print(message)
     
