@@ -29,11 +29,11 @@ def fix_line_endings(file_path):
 
 if __name__ == "__main__":
     print("PIPELINE: RUNNING BAR SPEED TRACKING")
-    #BST.run()
+    BST.run()
     print("PIPELINE: BAR SPEED TRACKING COMPLETE")
 
     print("PIPELINE: RUNNING OPEN FACE EXTRACTION")
-    #OF.run()
+    OF.run()
     print("PIPELINE: OPEN FACE EXTRACTION COMPLETE")
 
     print("PIPELINE: RUNNING MMPOSE EXTRACTION")
