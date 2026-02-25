@@ -33,7 +33,7 @@ if __name__ == "__main__":
     print("PIPELINE: BAR SPEED TRACKING COMPLETE")
 
     print("PIPELINE: RUNNING OPEN FACE EXTRACTION")
-    OF.run()
+    OF.run(create_visualizations=True)
     print("PIPELINE: OPEN FACE EXTRACTION COMPLETE")
 
     print("PIPELINE: RUNNING MMPOSE EXTRACTION")

@@ -1,0 +1,10 @@
+Video: Squat 148
+Movement: Squat
+Rep pattern: TBT
+Detected reps: 3
+
+Rep 1: 2.28 seconds
+Rep 2: 1.46 seconds
+Rep 3: 1.65 seconds
+
+Fatigue (Last - First): -0.63s

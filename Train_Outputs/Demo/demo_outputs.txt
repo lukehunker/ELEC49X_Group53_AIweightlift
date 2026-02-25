@@ -1,0 +1,31 @@
+Squat 148 
+Squat 148 --- DEBUG: Detected reps (relative shoulder height) ---
+Squat 148 JSON: ../../Train_Outputs/Demo/Squat 148_keypoints.json
+Squat 148 Bottom frames: [79, 123, 158, 412, 449, 539, 642, 729, 865, 909, 964, 1008, 1099]
+Squat 148 KEEP Rep 0: frames 79->123 (44 frames), top=-1.646, bottom=-1.362, drop=0.285
+Squat 148 KEEP Rep 1: frames 123->158 (35 frames), top=-1.673, bottom=-1.326, drop=0.347
+Squat 148 KEEP Rep 2: frames 158->412 (254 frames), top=-1.802, bottom=-1.360, drop=0.441
+Squat 148 KEEP Rep 3: frames 412->449 (37 frames), top=-1.526, bottom=-1.219, drop=0.307
+Squat 148 KEEP Rep 4: frames 449->539 (90 frames), top=-1.805, bottom=-1.353, drop=0.453
+Squat 148 DROP Rep 5: frames 539->642 (103 frames), top=-1.930, bottom=-1.690, drop=0.240
+Squat 148 DROP Rep 6: frames 642->729 (87 frames), top=-1.474, bottom=-1.342, drop=0.132
+Squat 148 KEEP Rep 7: frames 729->865 (136 frames), top=-1.822, bottom=-1.308, drop=0.515
+Squat 148 DROP Rep 8: frames 865->909 (44 frames), top=-1.883, bottom=-1.670, drop=0.213
+Squat 148 DROP Rep 9: frames 909->964 (55 frames), top=-1.787, bottom=-1.659, drop=0.127
+Squat 148 DROP Rep 10: frames 964->1008 (44 frames), top=-1.581, bottom=-1.575, drop=0.007
+Squat 148 DROP Rep 11: frames 1008->1099 (91 frames), top=-1.558, bottom=-1.350, drop=0.207
+Squat 148 Max drop=0.515 | threshold=0.257
+Squat 148 -----------------------------------------------
+Squat 148 
+Squat 148 RESULT
+Squat 148 First rep: (79, 123)
+Squat 148 Last rep : (729, 865)
+Squat 148 D value  : 1.2926348447799683
+Squat 85 
+Squat 85 --- DEBUG: Detected reps (relative shoulder height) ---
+Squat 85 JSON: ../../Train_Outputs/Demo/Squat 85_keypoints.json
+Squat 85 Bottom frames: [548]
+Squat 85 Max drop=0.000 | threshold=0.250
+Squat 85 -----------------------------------------------
+Squat 85 
+Squat 85 SKIP: only 0 valid rep(s) detected.

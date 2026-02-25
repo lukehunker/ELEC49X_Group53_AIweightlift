@@ -10,7 +10,7 @@ import pandas as pd
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
-VIDEOS_ROOT = "../../lifting_videos/Augmented/"
+VIDEOS_ROOT = "../../lifting_videos/Demo_Videos/"
 MOVEMENT_FOLDERS = ["Bench Press", "Squat", "Deadlift"]
 
 # Outputs

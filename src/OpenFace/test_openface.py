@@ -102,7 +102,7 @@ def create_visualization_video(video_path, csv_path, output_path):
     return output_path
 
 
-def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_csv=None, create_visualizations=False):
+def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_csv=None, create_visualizations=False, output_dir=None):
     if isinstance(video_paths_or_folder, str) and os.path.isdir(video_paths_or_folder):
         print(f"Scanning folder: {video_paths_or_folder}")
         patterns = ['**/*.mp4', '**/*.mov', '**/*.MOV', '**/*.MP4']
@@ -135,7 +135,10 @@ def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_cs
     openface_cache_dir = os.path.join(project_root, 'output', 'openface')  # Where pose-guided videos are cached
     
     if create_visualizations:
-        vis_output_dir = os.path.join(project_root, 'Train_Outputs')  # Output visualizations to Train_Outputs
+        if output_dir is None:
+            vis_output_dir = os.path.join(project_root, 'Train_Outputs')  # Default output
+        else:
+            vis_output_dir = output_dir  # Use provided output directory
         os.makedirs(vis_output_dir, exist_ok=True)
     
     results = []
@@ -194,14 +197,18 @@ def extract_single_video(video_path, rpe_labels_csv=None, output_csv=None, creat
     """Extract features from a single video - convenience wrapper for demos."""
     return extract_openface_batch([video_path], rpe_labels_csv, output_csv, create_visualizations=create_visualization)
 
-def run(create_visualizations=False):
-    video_folder = "../lifting_videos/Augmented/"
+def run(create_visualizations=False, output_dir=None, output_csv=None):
+    video_folder = "../lifting_videos/Demo_Videos/"
+    
+    if output_csv is None:
+        output_csv = "../Train_Outputs/openface_features_all.csv"
 
     openface_df = extract_openface_batch(
         video_folder,
         rpe_labels_csv="../lifting_videos/Augmented/dataset_labelled.csv",
-        output_csv="../Train_Outputs/openface_features_all.csv",
-        create_visualizations=create_visualizations
+        output_csv=output_csv,
+        create_visualizations=create_visualizations,
+        output_dir=output_dir
     )
 
     print(f"\n{'=' * 80}")

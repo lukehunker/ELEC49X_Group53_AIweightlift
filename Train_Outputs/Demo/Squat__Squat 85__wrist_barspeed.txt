@@ -1,0 +1,10 @@
+Video: Squat 85
+Movement: Squat
+Rep pattern: TBT
+Detected reps: 3
+
+Rep 1: 2.91 seconds
+Rep 2: 3.88 seconds
+Rep 3: 3.46 seconds
+
+Fatigue (Last - First): 0.55s
