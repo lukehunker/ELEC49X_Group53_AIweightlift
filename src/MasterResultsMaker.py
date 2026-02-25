@@ -22,50 +22,34 @@ def run():
     # 1. Load Data
     # ---------------------------------------------------------
 
-    # --- Load RPE ---
     try:
         rpe_df = pd.read_csv(rpe_path)
-        # Normalize column names (strip whitespace)
         rpe_df.columns = rpe_df.columns.str.strip()
-
-        # Verify columns exist
         if 'Video' not in rpe_df.columns or 'RPE' not in rpe_df.columns:
-            print(f"[ERROR] RPE file missing 'Video' or 'RPE' columns. Found: {rpe_df.columns.tolist()}")
+            print(f"[ERROR] RPE file missing 'Video' or 'RPE'. Found: {rpe_df.columns.tolist()}")
             return
-
-        # Rename 'Video' to 'video_stem' for clear merging later
         rpe_df['video_stem'] = rpe_df['Video'].astype(str).str.strip()
         rpe_subset = rpe_df[['video_stem', 'RPE']].copy()
-
     except FileNotFoundError:
-        print(f"[ERROR] Could not find {rpe_path}")
+        print(f"[ERROR] Could not find {rpe_path}");
         return
 
-    # --- Load Bar Speed ---
     try:
         bs_df = pd.read_excel(bar_speed_path)
     except FileNotFoundError:
-        print(f"[ERROR] Could not find {bar_speed_path}")
-        return
-    except Exception as e:
-        print(f"[ERROR] Failed to read Bar Speed Excel: {e}")
+        print(f"[ERROR] Could not find {bar_speed_path}");
         return
 
-    # --- Load OpenFace ---
     try:
         of_df = pd.read_csv(openface_path)
     except FileNotFoundError:
-        print(f"[ERROR] Could not find {openface_path}")
+        print(f"[ERROR] Could not find {openface_path}");
         return
 
-    # --- Load D-Metrics (Angle Change) ---
     try:
         dmetrics_df = pd.read_excel(angleChange_path)
     except FileNotFoundError:
-        print(f"[ERROR] Could not find {angleChange_path}")
-        return
-    except Exception as e:
-        print(f"[ERROR] Failed to read D-Metrics Excel: {e}")
+        print(f"[ERROR] Could not find {angleChange_path}");
         return
 
     # ---------------------------------------------------------
@@ -73,61 +57,68 @@ def run():
     # ---------------------------------------------------------
 
     def get_stem(filename):
+        if pd.isna(filename): return ""
         return os.path.splitext(str(filename))[0].strip()
 
-    # --- Filter & Prep Bar Speed ---
+    # --- Prep Bar Speed ---
     req_bs_cols = ['video_name', 'delta_speed_m_s', 'rep_count']
     if not all(c in bs_df.columns for c in req_bs_cols):
-        print(f"[ERROR] Bar Speed file missing columns. Needed: {req_bs_cols}")
+        print(f"[ERROR] Bar Speed missing columns. Needed: {req_bs_cols}")
         return
-
     bs_subset = bs_df[req_bs_cols].copy()
     bs_subset['video_name'] = bs_subset['video_name'].astype(str).str.strip()
     bs_subset['video_stem'] = bs_subset['video_name'].apply(get_stem)
 
-    # --- Filter & Prep OpenFace ---
+    # --- Prep OpenFace ---
     if 'video_name' not in of_df.columns:
-        print("[ERROR] OpenFace file is missing 'video_name' column")
+        print("[ERROR] OpenFace missing 'video_name' column");
         return
-
     au_cols = [c for c in of_df.columns if re.search(r"AU\d+_max", c)]
-    print(f"Found {len(au_cols)} AU max columns")
-
     req_of_cols = ['video_name'] + au_cols
     of_subset = of_df[req_of_cols].copy()
-    of_subset['video_name'] = of_subset['video_name'].astype(str).str.strip()
+    of_subset['video_stem'] = of_subset['video_name'].astype(str).apply(get_stem)
+    of_subset = of_subset.drop(columns=['video_name'])
 
-    # --- Filter & Prep D-Metrics ---
+    # --- Prep D-Metrics (Filtered to d_value only) ---
     if 'video_name' not in dmetrics_df.columns:
-        print("[ERROR] D-Metrics file is missing 'video_name' column")
+        print("[ERROR] D-Metrics missing 'video_name' column");
+        return
+    if 'd_value' not in dmetrics_df.columns:
+        print(f"[ERROR] D-Metrics missing 'd_value' column. Found: {dmetrics_df.columns.tolist()}")
         return
 
-    # We take all columns from dmetrics, just clean the merge key
-    dmetrics_df['video_name'] = dmetrics_df['video_name'].astype(str).str.strip()
+    dmetrics_df['video_stem'] = dmetrics_df['video_name'].astype(str).apply(get_stem)
+    # Subset to ONLY keep the stem and d_value
+    dmetrics_df = dmetrics_df[['video_stem', 'd_value']].copy()
 
     # ---------------------------------------------------------
     # 3. Merge Strategy
     # ---------------------------------------------------------
     print("Merging data...")
 
-    # Step A: Merge Bar Speed and OpenFace on 'video_name'
-    master_df = pd.merge(bs_subset, of_subset, on='video_name', how='outer')
+    # Strip overlapping non-key columns just in case files share generic column names
+    of_overlap = [c for c in of_subset.columns if c in bs_subset.columns and c != 'video_stem']
+    of_subset = of_subset.drop(columns=of_overlap)
 
-    # Step B: Merge D-Metrics into master on 'video_name'
-    master_df = pd.merge(master_df, dmetrics_df, on='video_name', how='outer')
+    master_df = pd.merge(bs_subset, of_subset, on='video_stem', how='outer')
 
-    # Step C: Fill missing 'video_stem' if needed
-    if 'video_stem' not in master_df.columns or master_df['video_stem'].isnull().any():
-        master_df['video_stem'] = master_df['video_name'].apply(get_stem)
+    dmetrics_overlap = [c for c in dmetrics_df.columns if c in master_df.columns and c != 'video_stem']
+    dmetrics_df = dmetrics_df.drop(columns=dmetrics_overlap)
 
-    # Step D: Merge RPE data on 'video_stem'
+    master_df = pd.merge(master_df, dmetrics_df, on='video_stem', how='outer')
+
+    # Fill in the final video_name for any rows that were missing from Bar Speed
+    if 'video_name' in master_df.columns:
+        master_df['video_name'] = master_df['video_name'].fillna(master_df['video_stem'] + ".mp4")
+    else:
+        master_df['video_name'] = master_df['video_stem']
+
     final_df = pd.merge(master_df, rpe_subset, on='video_stem', how='left')
 
     # ---------------------------------------------------------
     # 4. Reorder Columns
     # ---------------------------------------------------------
     cols = list(final_df.columns)
-
     head_cols = ['video_name', 'RPE', 'delta_speed_m_s', 'rep_count']
     rest_cols = [c for c in cols if c not in head_cols and c != 'video_stem']
     rest_cols.sort()
@@ -143,10 +134,8 @@ def run():
     try:
         final_df.to_excel(output_excel_path, index=False)
         print(f"\n[SUCCESS] Master Results saved to: {output_excel_path}")
-        print(f"Total videos: {len(final_df)}")
+        print(f"Total unique videos: {len(final_df)}")
         print(f"Videos with RPE found: {final_df['RPE'].notna().sum()}")
-        print("First 5 columns:", final_df.columns.tolist()[:5])
-
     except PermissionError:
         print(f"[ERROR] Could not save to {output_excel_path}. Is the file open?")
     except Exception as e:
