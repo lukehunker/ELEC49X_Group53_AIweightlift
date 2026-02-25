@@ -121,7 +121,7 @@ def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_cs
         use_pose_guidance=True,
         max_only=True,
         load_minimal_columns=True,
-        sample_fps=10,
+        sample_fps=None,
         verbose=True
     )
     
