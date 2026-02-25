@@ -59,20 +59,20 @@ def MMPoseExtraction():
     D.main()
 
 if __name__ == "__main__":
-    print("PIPELINE: RUNNING BAR SPEED TRACKING")
-    # BST.run()
-    print("PIPELINE: BAR SPEED TRACKING COMPLETE")
+    #print("PIPELINE: RUNNING BAR SPEED TRACKING")
+    #BST.run()
+    #print("PIPELINE: BAR SPEED TRACKING COMPLETE")
 
-    print("PIPELINE: RUNNING OPEN FACE EXTRACTION")
-    # OF.run(create_visualizations=True)
-    print("PIPELINE: OPEN FACE EXTRACTION COMPLETE")
+    #print("PIPELINE: RUNNING OPEN FACE EXTRACTION")
+    #OF.run(create_visualizations=True)
+    #print("PIPELINE: OPEN FACE EXTRACTION COMPLETE")
 
-    print("PIPELINE: RUNNING MMPOSE EXTRACTION")
-    # MMPoseExtraction()
-    print("PIPELINE: MMPOSE EXTRACTION COMPLETE")
+    #print("PIPELINE: RUNNING MMPOSE EXTRACTION")
+    #MMPoseExtraction()
+    #print("PIPELINE: MMPOSE EXTRACTION COMPLETE")
 
     print("PIPELINE: CONVERTING RESULTS TO EXCEL")
-    M.createMasterResults()
+    M.run()
     print("PIPELINE: CONVERTING RESULTS TO EXCEL COMPLETE")
 
     print("PIPELINE: TRAINING LGBM REGRESSION MODEL")
