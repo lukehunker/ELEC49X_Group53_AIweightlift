@@ -26,21 +26,10 @@ def fix_line_endings(file_path):
     except Exception as e:
         print(f"   [Warning] Could not check line endings for {file_path}: {e}")
 
-
-if __name__ == "__main__":
-    print("PIPELINE: RUNNING BAR SPEED TRACKING")
-    BST.run()
-    print("PIPELINE: BAR SPEED TRACKING COMPLETE")
-
-    print("PIPELINE: RUNNING OPEN FACE EXTRACTION")
-    OF.run(create_visualizations=True)
-    print("PIPELINE: OPEN FACE EXTRACTION COMPLETE")
-
-    print("PIPELINE: RUNNING MMPOSE EXTRACTION")
-
+def MMPoseExtraction():
     # Get the directory where train.py is located (src/)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     scripts = [
         os.path.join(script_dir, "MMPose", "bench_extraction.sh"),
         os.path.join(script_dir, "MMPose", "deadlift_extraction.sh"),
@@ -51,7 +40,7 @@ if __name__ == "__main__":
 
     # Change to MMPose directory so relative paths in scripts work correctly
     mmpose_dir = os.path.join(script_dir, "MMPose")
-    
+
     for script in scripts:
         script_name = os.path.basename(script)
         print(f"--- Processing {script_name} ---")
@@ -68,12 +57,24 @@ if __name__ == "__main__":
             # Optional: sys.exit(1) if you want the whole pipeline to stop
 
     D.main()
+
+if __name__ == "__main__":
+    print("PIPELINE: RUNNING BAR SPEED TRACKING")
+    # BST.run()
+    print("PIPELINE: BAR SPEED TRACKING COMPLETE")
+
+    print("PIPELINE: RUNNING OPEN FACE EXTRACTION")
+    # OF.run(create_visualizations=True)
+    print("PIPELINE: OPEN FACE EXTRACTION COMPLETE")
+
+    print("PIPELINE: RUNNING MMPOSE EXTRACTION")
+    # MMPoseExtraction()
     print("PIPELINE: MMPOSE EXTRACTION COMPLETE")
 
     print("PIPELINE: CONVERTING RESULTS TO EXCEL")
-    # M.createMasterResults()
+    M.createMasterResults()
     print("PIPELINE: CONVERTING RESULTS TO EXCEL COMPLETE")
 
     print("PIPELINE: TRAINING LGBM REGRESSION MODEL")
-    # LGBM.run()
+    LGBM.run()
     print("PIPELINE: LGBM REGRESSION TRAINING COMPLETE")
