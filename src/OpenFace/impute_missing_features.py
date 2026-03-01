@@ -26,15 +26,21 @@ def load_rpe_labels(rpe_csv_path):
     """Load RPE labels for each video."""
     df = pd.read_csv(rpe_csv_path)
     
-    # Expected columns: Video, RPE (from Dataset_labelled.csv)
-    required_cols = ['Video', 'RPE']
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"RPE CSV must have column: {col}. Found: {list(df.columns)}")
+    # Expected columns: Video/Set and RPE (from Dataset_labelled.csv)
+    # The CSV might have either 'Video' or 'Set' as the first column
+    if 'Video' in df.columns:
+        video_col = 'Video'
+    elif 'Set' in df.columns:
+        video_col = 'Set'
+    else:
+        raise ValueError(f"RPE CSV must have column 'Video' or 'Set'. Found: {list(df.columns)}")
+    
+    if 'RPE' not in df.columns:
+        raise ValueError(f"RPE CSV must have column 'RPE'. Found: {list(df.columns)}")
     
     # Normalize video names to match feature CSV format
     # Dataset_labelled.csv has "Bench Press 1", features CSV has "Bench Press 1.mp4"
-    df['video_name'] = df['Video'].apply(lambda x: f"{x}.mp4" if not x.endswith('.mp4') else x)
+    df['video_name'] = df[video_col].apply(lambda x: f"{x}.mp4" if not x.endswith('.mp4') else x)
     df['rpe'] = df['RPE']
     
     # Extract exercise type from video name

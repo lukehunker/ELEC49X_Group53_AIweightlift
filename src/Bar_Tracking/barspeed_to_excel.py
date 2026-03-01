@@ -32,7 +32,7 @@ PIXELS_PER_CM = 10.0
 # ---------------------------------------------------------
 inferencer = MMPoseInferencer(
     pose2d="body",
-    device="cpu"
+    device="cuda:0"
 )
 
 LEFT_WRIST_IDX = 9

@@ -17,12 +17,13 @@ import cv2
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from scipy.signal import find_peaks, savgol_filter
-from scipy.stats import skew, kurtosis
 import warnings
 warnings.filterwarnings('ignore')
 
-from . import openface_utils as ofu
+try:
+    from . import openface_utils as ofu
+except ImportError:
+    import openface_utils as ofu
 
 
 class OpenFaceExtractor:
@@ -48,12 +49,6 @@ class OpenFaceExtractor:
         'AU01_r', 'AU02_r', 'AU04_r', 'AU05_r', 'AU06_r', 'AU07_r',
         'AU09_r', 'AU10_r', 'AU12_r', 'AU14_r', 'AU15_r', 'AU17_r',
         'AU20_r', 'AU23_r', 'AU25_r', 'AU26_r', 'AU45_r'
-    ]
-    
-    ALL_AU_CLASSIFICATION = [
-        'AU01_c', 'AU02_c', 'AU04_c', 'AU05_c', 'AU06_c', 'AU07_c',
-        'AU09_c', 'AU10_c', 'AU12_c', 'AU14_c', 'AU15_c', 'AU17_c',
-        'AU20_c', 'AU23_c', 'AU25_c', 'AU26_c', 'AU28_c', 'AU45_c'
     ]
     
     def __init__(self, verbose=True, use_pose_guidance=True, sample_fps=10, load_minimal_columns=True, max_only=True, visualize=False):
@@ -254,17 +249,7 @@ class OpenFaceExtractor:
         # 2. AU intensity features
         features.update(self._extract_au_features(df))
         
-        # 3. Repetition features
-        rep_features = self._extract_repetition_features(df, expected_reps)
-        features.update(rep_features)
-        
-        # 4. Landmark stability features
-        features.update(self._extract_landmark_features(df))
-        
-        # 5. Temporal dynamics
-        features.update(self._extract_temporal_features(df))
-        
-        # 6. Metadata
+        # 3. Metadata
         features['metadata'] = {
             'video_name': video_name,
             'width': metadata['width'],
@@ -275,6 +260,52 @@ class OpenFaceExtractor:
         }
         
         self._log(f"\nExtracted {len([k for k in features.keys() if k != 'metadata'])} features")
+        
+        return features
+    
+    def extract_from_cached_csv(self, csv_path, video_name=None):
+        """
+        Extract features from an already-processed OpenFace CSV file.
+        Useful for rebuilding combined results from cached data.
+        
+        Args:
+            csv_path: Path to cached OpenFace CSV file
+            video_name: Optional video name (extracted from path if not provided)
+        
+        Returns:
+            dict: Feature dictionary
+        """
+        if video_name is None:
+            video_name = os.path.basename(csv_path).replace("_pose_guided.csv", "")
+        
+        # Load data
+        columns_to_load = 'rpe_minimal' if self.load_minimal_columns else None
+        df_all = ofu.load_landmark_data(csv_path, success_only=False, 
+                                        sample_fps=self.sample_fps, 
+                                        columns_only=columns_to_load)
+        df = ofu.load_landmark_data(csv_path, success_only=True,
+                                    sample_fps=self.sample_fps,
+                                    columns_only=columns_to_load)
+        
+        if len(df) < 10:
+            raise ValueError(f"Insufficient valid frames ({len(df)} detected).")
+        
+        # Create minimal metadata (we don't have video file)
+        metadata = {
+            'total_frames': len(df_all),
+            'fps': 30,  # Assumed
+            'width': 0,
+            'height': 0
+        }
+        
+        # Extract features
+        features = {}
+        features.update(self._extract_detection_features(df_all, metadata))
+        features.update(self._extract_au_features(df))
+        features['metadata'] = {
+            'video_name': video_name,
+            'valid_frames': len(df)
+        }
         
         return features
     
@@ -315,12 +346,8 @@ class OpenFaceExtractor:
             prefix = au.replace('_r', '')
             
             if self.max_only:
-                # Extract only max/peak features for RPE prediction
+                # Extract only max features for RPE prediction
                 features[f'{prefix}_max'] = np.max(au_data)
-                features[f'{prefix}_q95'] = np.percentile(au_data, 95)
-                # Peak ratio: max / mean (indicates how much stronger peak is vs average)
-                mean_val = np.mean(au_data)
-                features[f'{prefix}_peak_ratio'] = np.max(au_data) / mean_val if mean_val > 0.01 else 0
             else:
                 # Full statistical features
                 features[f'{prefix}_mean'] = np.mean(au_data)
@@ -361,141 +388,4 @@ class OpenFaceExtractor:
         ])
         
         return features
-    
-    def _extract_repetition_features(self, df, expected_reps=None):
-        """Extract repetition-based features."""
-        features = {}
-        
-        # Use most responsive AU for rep detection
-        au_ranges = {au: df[au].max() - df[au].min() 
-                     for au in self.EXERTION_AUS if au in df.columns}
-        
-        if not au_ranges:
-            return {
-                'detected_reps': 0,
-                'rep_consistency': 0,
-                'rep_avg_intensity': 0,
-            }
-        
-        best_au = max(au_ranges.items(), key=lambda x: x[1])[0]
-        au_data = df[best_au].values
-        
-        # Detect peaks (repetitions)
-        peaks, smoothed = self._detect_peaks(au_data)
-        
-        features['detected_reps'] = len(peaks)
-        
-        if len(peaks) >= 2:
-            peak_values = au_data[peaks]
-            
-            # Repetition consistency
-            peak_mean = np.mean(peak_values)
-            peak_std = np.std(peak_values)
-            features['rep_consistency'] = 1 - (peak_std / peak_mean) if peak_mean > 0 else 0
-            features['rep_avg_intensity'] = peak_mean
-            features['rep_intensity_std'] = peak_std
-            features['rep_intensity_range'] = np.max(peak_values) - np.min(peak_values)
-            
-            # Rep timing (frames between peaks)
-            if len(peaks) > 1:
-                rep_intervals = np.diff(peaks)
-                features['rep_avg_interval'] = np.mean(rep_intervals)
-                features['rep_interval_std'] = np.std(rep_intervals)
-                features['rep_tempo_consistency'] = 1 - (np.std(rep_intervals) / np.mean(rep_intervals)) if np.mean(rep_intervals) > 0 else 0
-            else:
-                features['rep_avg_interval'] = 0
-                features['rep_interval_std'] = 0
-                features['rep_tempo_consistency'] = 0
-        else:
-            features['rep_consistency'] = 0
-            features['rep_avg_intensity'] = 0
-            features['rep_intensity_std'] = 0
-            features['rep_intensity_range'] = 0
-            features['rep_avg_interval'] = 0
-            features['rep_interval_std'] = 0
-            features['rep_tempo_consistency'] = 0
-        
-        # Rep detection accuracy (if expected reps provided)
-        if expected_reps:
-            features['rep_detection_accuracy'] = min(1.0, features['detected_reps'] / expected_reps)
-        else:
-            features['rep_detection_accuracy'] = 1.0  # Unknown, assume perfect
-        
-        return features
-    
-    def _detect_peaks(self, signal, min_distance=20):
-        """Detect peaks in AU signal for repetition counting."""
-        # Smooth signal
-        if len(signal) > 5:
-            window_len = min(11, len(signal) if len(signal) % 2 == 1 else len(signal) - 1)
-            smoothed = savgol_filter(signal, window_len, 3)
-        else:
-            smoothed = signal
-        
-        # Find peaks with prominence
-        peaks, _ = find_peaks(smoothed, distance=min_distance, prominence=0.3)
-        
-        return peaks, smoothed
-    
-    def _extract_landmark_features(self, df):
-        """Extract facial landmark stability features."""
-        features = {}
-        
-        # Calculate landmark movement/jitter
-        x_cols = [f'x_{i}' for i in range(68)]
-        y_cols = [f'y_{i}' for i in range(68)]
-        
-        # Average landmark stability (lower = more stable)
-        x_stds = [df[col].std() for col in x_cols if col in df.columns]
-        y_stds = [df[col].std() for col in y_cols if col in df.columns]
-        
-        features['landmark_stability_x'] = np.mean(x_stds) if x_stds else 0
-        features['landmark_stability_y'] = np.mean(y_stds) if y_stds else 0
-        features['landmark_stability_overall'] = np.mean(x_stds + y_stds) if (x_stds and y_stds) else 0
-        
-        # Head movement (based on face center movement)
-        if 'x_30' in df.columns and 'y_30' in df.columns:  # Nose tip
-            nose_x = df['x_30'].values
-            nose_y = df['y_30'].values
-            
-            # Movement magnitude
-            dx = np.diff(nose_x)
-            dy = np.diff(nose_y)
-            movement = np.sqrt(dx**2 + dy**2)
-            
-            features['head_movement_mean'] = np.mean(movement)
-            features['head_movement_max'] = np.max(movement)
-            features['head_movement_std'] = np.std(movement)
-        else:
-            features['head_movement_mean'] = 0
-            features['head_movement_max'] = 0
-            features['head_movement_std'] = 0
-        
-        return features
-    
-    def _extract_temporal_features(self, df):
-        """Extract temporal dynamics of facial expressions."""
-        features = {}
-        
-        # Rate of change for key AUs (velocity)
-        for au in self.EXERTION_AUS[:3]:  # Top 3 AUs to avoid too many features
-            if au not in df.columns:
-                continue
-            
-            au_data = df[au].values
-            velocity = np.abs(np.diff(au_data))
-            
-            prefix = au.replace('_r', '')
-            features[f'{prefix}_velocity_mean'] = np.mean(velocity)
-            features[f'{prefix}_velocity_max'] = np.max(velocity)
-            features[f'{prefix}_velocity_std'] = np.std(velocity)
-        
-        # Overall expression change rate
-        all_au_data = df[self.EXERTION_AUS].values
-        overall_velocity = np.mean(np.abs(np.diff(all_au_data, axis=0)), axis=1)
-        
-        features['expression_change_mean'] = np.mean(overall_velocity)
-        features['expression_change_max'] = np.max(overall_velocity)
-        features['expression_change_std'] = np.std(overall_velocity)
-        
-        return features
+

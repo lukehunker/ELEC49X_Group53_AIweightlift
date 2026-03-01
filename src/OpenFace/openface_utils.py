@@ -4,15 +4,17 @@ import subprocess
 import pandas as pd
 import numpy as np
 import glob
-import random
-import sys
 
 try:
     from .pose_guided_face_detection import PoseGuidedFaceDetector
     POSE_GUIDANCE_AVAILABLE = True
 except ImportError:
-    POSE_GUIDANCE_AVAILABLE = False
-    print("Note: Pose guidance not available (MediaPipe not installed)")
+    try:
+        from pose_guided_face_detection import PoseGuidedFaceDetector
+        POSE_GUIDANCE_AVAILABLE = True
+    except ImportError:
+        POSE_GUIDANCE_AVAILABLE = False
+        print("Note: Pose guidance not available (MediaPipe not installed)")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -68,12 +70,15 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
     
     video_name = os.path.splitext(os.path.basename(original_video_path))[0]
     
-    csv_pattern = os.path.join(OUTPUT_DIR, f"{video_name}*.csv")
-    csv_files = glob.glob(csv_pattern)
+    # Check for exact cache file match (not glob pattern to avoid partial matches like "Squat 1" matching "Squat 10")
+    if use_pose_guidance:
+        expected_csv = os.path.join(OUTPUT_DIR, f"{video_name}_pose_guided.csv")
+    else:
+        expected_csv = os.path.join(OUTPUT_DIR, f"{video_name}.csv")
     
-    if csv_files and not force_rerun:
-        print(f"Using existing OpenFace output: {os.path.basename(csv_files[0])}")
-        return csv_files[0]
+    if os.path.exists(expected_csv) and not force_rerun:
+        print(f"Using existing OpenFace output: {os.path.basename(expected_csv)}")
+        return expected_csv
     
     print(f"Running OpenFace on {video_name}...")
     if not os.path.isfile(OPENFACE_BIN):
@@ -105,12 +110,12 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
         print(f"Error output: {e.stderr if e.stderr else 'No error message'}")
         raise RuntimeError(f"OpenFace processing failed: {e}")
     
-    csv_files = glob.glob(csv_pattern)
-    if not csv_files:
-        raise RuntimeError("OpenFace finished but did not generate a CSV file.")
+    # Check for the expected output CSV file
+    if not os.path.exists(expected_csv):
+        raise RuntimeError(f"OpenFace finished but did not generate expected CSV: {expected_csv}")
     
-    print(f"OpenFace processing complete: {os.path.basename(csv_files[0])}")
-    return csv_files[0]
+    print(f"OpenFace processing complete: {os.path.basename(expected_csv)}")
+    return expected_csv
 
 
 def load_landmark_data(csv_path, success_only=True, sample_fps=None, columns_only=None):
@@ -121,9 +126,6 @@ def load_landmark_data(csv_path, success_only=True, sample_fps=None, columns_onl
         'frame', 'timestamp', 'success', 'confidence',
         'AU04_r', 'AU06_r', 'AU07_r', 'AU09_r', 'AU10_r',
         'AU12_r', 'AU17_r', 'AU20_r', 'AU25_r', 'AU26_r',
-        'x_28', 'y_28',
-        'x_36', 'y_36',
-        'x_45', 'y_45',
     ]
     
     if columns_only == 'rpe_minimal':

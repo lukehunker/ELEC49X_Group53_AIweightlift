@@ -1,11 +1,17 @@
-from OpenFace.openface_feature_extractor import OpenFaceExtractor
-from OpenFace.impute_missing_features import identify_missing_videos, impute_by_rpe_average, load_rpe_labels
-import OpenFace.openface_utils as ofu
+try:
+    from .openface_feature_extractor import OpenFaceExtractor
+    from .impute_missing_features import identify_missing_videos, impute_by_rpe_average, load_rpe_labels
+    from . import openface_utils as ofu
+except ImportError:
+    from openface_feature_extractor import OpenFaceExtractor
+    from impute_missing_features import identify_missing_videos, impute_by_rpe_average, load_rpe_labels
+    import openface_utils as ofu
 import pandas as pd
 import glob
 import os
 import cv2
 import numpy as np
+import gc
 
 
 def create_visualization_video(video_path, csv_path, output_path):
@@ -117,14 +123,6 @@ def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_cs
     if len(video_paths) == 0:
         raise ValueError("No videos found!")
     
-    extractor = OpenFaceExtractor(
-        use_pose_guidance=True,
-        max_only=True,
-        load_minimal_columns=True,
-        sample_fps=None,
-        verbose=True
-    )
-    
     # Extract features from all videos
     print(f"\n{'='*80}")
     print(f"EXTRACTING FEATURES FROM {len(video_paths)} VIDEOS")
@@ -142,8 +140,20 @@ def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_cs
         os.makedirs(vis_output_dir, exist_ok=True)
     
     results = []
+    
+    # Process videos one at a time with fresh extractor (aggressive memory management)
     for idx, video_path in enumerate(video_paths, 1):
         print(f"[{idx}/{len(video_paths)}] Processing: {os.path.basename(video_path)}")
+        
+        # Create fresh extractor for each video to prevent MediaPipe GPU memory leak
+        extractor = OpenFaceExtractor(
+            use_pose_guidance=True,
+            max_only=True,
+            load_minimal_columns=True,
+            sample_fps=None,
+            verbose=True
+        )
+        
         try:
             features = extractor.extract_from_video(video_path)
             result = {'video_name': os.path.basename(video_path)}
@@ -166,10 +176,26 @@ def extract_openface_batch(video_paths_or_folder, rpe_labels_csv=None, output_cs
                     # Output visualization to Train_Outputs
                     vis_output = os.path.join(vis_output_dir, f"{base_name}_landmarks_visualized.mp4")
                     create_visualization_video(pose_guided_video, openface_csv, vis_output)
+            
+            # Memory cleanup every 10 videos
+            if idx % 10 == 0:
+                gc.collect()
+                # Save checkpoint every 50 videos
+                if idx % 50 == 0 and output_csv:
+                    checkpoint_df = pd.DataFrame(results)
+                    checkpoint_path = output_csv.replace('.csv', f'_checkpoint_{idx}.csv')
+                    checkpoint_df.to_csv(checkpoint_path, index=False)
+                    print(f"  [CHECKPOINT] Saved progress to {os.path.basename(checkpoint_path)}")
                 
         except Exception as e:
             print(f"  ERROR: {e}")
             results.append({'video_name': os.path.basename(video_path), 'error': str(e)})
+        
+        finally:
+            # Clean up extractor after each video to release MediaPipe GPU memory
+            del extractor
+            if idx % 5 == 0:  # More aggressive GC every 5 videos
+                gc.collect()
     
     df = pd.DataFrame(results)
     
@@ -198,14 +224,14 @@ def extract_single_video(video_path, rpe_labels_csv=None, output_csv=None, creat
     return extract_openface_batch([video_path], rpe_labels_csv, output_csv, create_visualizations=create_visualization)
 
 def run(create_visualizations=False, output_dir=None, output_csv=None):
-    video_folder = "../lifting_videos/Demo_Videos/"
+    video_folder = "../../lifting_videos/Augmented/"
     
     if output_csv is None:
-        output_csv = "../Train_Outputs/openface_features_all.csv"
+        output_csv = "../../Train_Outputs/openface_features_all.csv"
 
     openface_df = extract_openface_batch(
         video_folder,
-        rpe_labels_csv="../lifting_videos/Augmented/dataset_labelled.csv",
+        rpe_labels_csv="../../lifting_videos/Augmented/dataset_labelled.csv",
         output_csv=output_csv,
         create_visualizations=create_visualizations,
         output_dir=output_dir

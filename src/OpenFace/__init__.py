@@ -10,9 +10,11 @@ from .impute_missing_features import (
     impute_by_rpe_average,
     load_rpe_labels
 )
+from .openface_inference import extract_features
 
 __all__ = [
     'OpenFaceExtractor',
+    'extract_features',  # Simple inference function for single videos
     'identify_missing_videos',
     'impute_by_rpe_average',
     'load_rpe_labels',
