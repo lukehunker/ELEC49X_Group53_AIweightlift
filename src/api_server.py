@@ -28,6 +28,7 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from OpenFace.openface_inference import extract_features as extract_openface
+from feature_extraction_api import extract_mmpose_features, extract_bar_speed_features
 import Bar_Tracking.barspeed_demo as barspeed
 import MMPose.feature_extraction_deadlift as mmpose_deadlift
 # Import other feature extractors as needed
@@ -175,38 +176,49 @@ async def predict_rpe(
         # 2. Extract MMPose features (body keypoints)
         print("  [2/3] Extracting body pose features...")
         try:
-            # TODO: Implement pose extraction for each lift type
-            # For now, using placeholder
-            # mmpose_features = extract_mmpose(video_path, lift_type)
-            # features.update(mmpose_features)
-            pass
+            mmpose_features = extract_mmpose_features(video_path, lift_type)
+            features.update(mmpose_features)
         except Exception as e:
             warnings.append(f"Pose extraction failed: {e}")
+            print(f"    Warning: {e}")
         
         # 3. Extract bar speed features
         print("  [3/3] Tracking bar speed...")
         try:
-            # TODO: Implement bar tracking
-            # bar_features = extract_bar_speed(video_path)
-            # features.update(bar_features)
-            pass
+            bar_features = extract_bar_speed_features(video_path, lift_type)
+            features.update(bar_features)
         except Exception as e:
             warnings.append(f"Bar tracking failed: {e}")
+            print(f"    Warning: {e}")
         
         # Encode lift type
         lift_encoded = ENCODER.transform([lift_type])[0]
         features['lift_type_encoded'] = lift_encoded
         
         # Check if we have minimum features for prediction
-        if len(features) < 10:  # Adjust threshold based on your model
+        if len(features) < 5:  # At least some basic features
             raise HTTPException(
                 status_code=422,
-                detail="Insufficient features extracted from video"
+                detail=f"Insufficient features extracted from video. Only got {len(features)} features."
             )
         
         # Prepare features for model (match training feature order)
-        # TODO: Create proper feature vector matching your training
-        feature_vector = [features.get(key, 0) for key in MODEL.feature_name()]
+        # Get model's expected feature names
+        expected_features = MODEL.feature_name()
+        
+        # Build feature vector in correct order, use 0 for missing features
+        feature_vector = []
+        missing_features = []
+        
+        for feature_name in expected_features:
+            if feature_name in features:
+                feature_vector.append(features[feature_name])
+            else:
+                feature_vector.append(0)  # Default to 0 for missing features
+                missing_features.append(feature_name)
+        
+        if missing_features:
+            print(f"  Warning: {len(missing_features)} features missing, using defaults")
         
         # Predict RPE
         print("  Making prediction...")
@@ -223,7 +235,9 @@ async def predict_rpe(
             "features": {
                 "detection_rate": features.get('detection_rate', 0),
                 "total_frames": features.get('total_frames', 0),
-                # Add other key features for transparency
+                "openface_features": {k: v for k, v in features.items() if 'AU' in k or 'detection' in k},
+                "pose_features": {k: v for k, v in features.items() if 'pose_' in k},
+                "bar_features": {k: v for k, v in features.items() if 'bar_' in k},
             },
             "warnings": warnings if warnings else None
         }
