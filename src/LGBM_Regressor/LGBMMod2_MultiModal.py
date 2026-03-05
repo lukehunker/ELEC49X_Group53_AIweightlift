@@ -70,7 +70,7 @@ if 'rep_change_s' in numeric_cols:
     print(f"\n✓ Keeping rep_change_s (bar speed/tempo)")
 
 # Remove frame count leakage
-print(f"\n❌ Removing frame count leakage:")
+print(f"\nRemoving frame count leakage:")
 for feat in LEAKAGE_FEATURES:
     if feat in numeric_cols:
         print(f"  - {feat}")

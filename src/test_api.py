@@ -14,28 +14,28 @@ def test_health():
     try:
         response = requests.get("http://localhost:8000/health", timeout=5)
         if response.status_code == 200:
-            print("✅ Server is healthy")
+            print("Server is healthy")
             print(f"   {response.json()}")
             return True
         else:
-            print(f"❌ Server health check failed: {response.status_code}")
+            print(f"Server health check failed: {response.status_code}")
             return False
     except requests.exceptions.ConnectionError:
-        print("❌ Cannot connect to server. Is it running?")
+        print("Cannot connect to server. Is it running?")
         print("   Start server with: cd src && python api_server.py")
         return False
     except Exception as e:
-        print(f"❌ Health check error: {e}")
+        print(f"Health check error: {e}")
         return False
 
 
 def test_prediction(video_path, lift_type="Squat"):
     """Test RPE prediction"""
     if not os.path.exists(video_path):
-        print(f"❌ Video file not found: {video_path}")
+        print(f"Video file not found: {video_path}")
         return False
     
-    print(f"\n📤 Uploading video: {os.path.basename(video_path)}")
+    print(f"\nUploading video: {os.path.basename(video_path)}")
     print(f"   Lift type: {lift_type}")
     print(f"   File size: {os.path.getsize(video_path) / 1024 / 1024:.2f} MB")
     print("\n   Processing (this may take 30-60 seconds)...")
@@ -54,13 +54,13 @@ def test_prediction(video_path, lift_type="Squat"):
         
         if response.status_code == 200:
             result = response.json()
-            print("\n✅ Prediction successful!")
-            print(f"   🏋️ Predicted RPE: {result['predicted_rpe']}")
-            print(f"   📊 Confidence: {result['confidence']*100:.0f}%")
+            print("\nPrediction successful!")
+            print(f"   Predicted RPE: {result['predicted_rpe']}")
+            print(f"   Confidence: {result['confidence']*100:.0f}%")
             print(f"   🎬 Video: {result['video_name']}")
             
             if result.get('warnings'):
-                print(f"\n   ⚠️  Warnings:")
+                print(f"\n   Warnings:")
                 for warning in result['warnings']:
                     print(f"      - {warning}")
             
@@ -74,15 +74,15 @@ def test_prediction(video_path, lift_type="Squat"):
             
             return True
         else:
-            print(f"\n❌ Prediction failed: {response.status_code}")
+            print(f"\nPrediction failed: {response.status_code}")
             print(f"   {response.text}")
             return False
             
     except requests.exceptions.Timeout:
-        print("\n❌ Request timeout - video processing took too long")
+        print("\nRequest timeout - video processing took too long")
         return False
     except Exception as e:
-        print(f"\n❌ Prediction error: {e}")
+        print(f"\nPrediction error: {e}")
         return False
 
 
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     
     # Test prediction
     if len(sys.argv) < 2:
-        print("\n⚠️  No video provided for prediction test")
+        print("\nNo video provided for prediction test")
         print("\nUsage:")
         print(f"  python {sys.argv[0]} path/to/video.mp4 [lift_type]")
         print("\nExample:")

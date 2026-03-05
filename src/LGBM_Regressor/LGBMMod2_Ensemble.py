@@ -257,5 +257,89 @@ plt.tight_layout()
 plt.savefig('lgbm_ensemble_results.png', dpi=300, bbox_inches='tight')
 plt.show()
 
-print(f"\n✅ Ensemble achieved MAE: {ensemble_mae:.4f}")
-print(f"{'   Getting closer to 0.50-0.65 target!' if ensemble_mae < 0.67 else '   Try LGBMMod2_Advanced.py for further improvements'}")
+print(f"\nEnsemble achieved MAE: {ensemble_mae:.4f}")
+
+# -----------------------------------------------------------
+# TRAIN FINAL MODELS ON FULL DATASET & SAVE
+# -----------------------------------------------------------
+print("\n" + "=" * 60)
+print("TRAINING FINAL MODELS ON FULL DATASET")
+print("=" * 60)
+
+# Scale full dataset
+scaler_final = StandardScaler()
+X_scaled_full = scaler_final.fit_transform(X)
+
+# Train final LightGBM
+print("\nTraining final LightGBM model...")
+lgbm_final = lgb.LGBMRegressor(**lgbm_params)
+lgbm_final.fit(X_scaled_full, y)
+
+# Train final XGBoost
+print("Training final XGBoost model...")
+xgb_final = xgb.XGBRegressor(**xgb_params)
+xgb_final.fit(X_scaled_full, y)
+
+# Save models
+import joblib
+import os
+import json
+
+output_dir = "../Train_Outputs"
+os.makedirs(output_dir, exist_ok=True)
+
+# Save LGBM model
+lgbm_model_path = os.path.join(output_dir, "lgbm_ensemble_model.txt")
+lgbm_final.booster_.save_model(lgbm_model_path)
+print(f"\nSaved LightGBM model: {lgbm_model_path}")
+
+# Save XGBoost model
+xgb_model_path = os.path.join(output_dir, "xgb_ensemble_model.json")
+xgb_final.save_model(xgb_model_path)
+print(f"Saved XGBoost model: {xgb_model_path}")
+
+# Save scaler
+scaler_path = os.path.join(output_dir, "ensemble_scaler.pkl")
+joblib.dump(scaler_final, scaler_path)
+print(f"Saved scaler: {scaler_path}")
+
+# Save metadata (feature names, ensemble weights, CV performance)
+metadata = {
+    "feature_columns": numeric_cols,
+    "n_features": len(numeric_cols),
+    "ensemble_weights": {
+        "lgbm": 0.6,
+        "xgb": 0.4
+    },
+    "cv_performance": {
+        "lgbm_mae": float(lgbm_mae),
+        "xgb_mae": float(xgb_mae),
+        "ensemble_mae": float(ensemble_mae),
+        "ensemble_r2": float(ensemble_r2)
+    },
+    "lgbm_params": lgbm_params,
+    "xgb_params": xgb_params,
+    "target": target,
+    "n_samples": len(df),
+    "rpe_range": {
+        "min": float(y.min()),
+        "max": float(y.max()),
+        "mean": float(y.mean())
+    }
+}
+
+metadata_path = os.path.join(output_dir, "ensemble_metadata.json")
+with open(metadata_path, 'w') as f:
+    json.dump(metadata, f, indent=2)
+print(f"Saved metadata: {metadata_path}")
+
+print("\n" + "=" * 60)
+print("MODEL SAVING COMPLETE")
+print("=" * 60)
+print(f"\nSaved files in: {output_dir}/")
+print(f"  - lgbm_ensemble_model.txt (LightGBM)")
+print(f"  - xgb_ensemble_model.json (XGBoost)")
+print(f"  - ensemble_scaler.pkl (StandardScaler)")
+print(f"  - ensemble_metadata.json (Feature names & config)")
+print(f"\nThese models can now be loaded by rpe_pipeline.py for predictions!")
+print("=" * 60)

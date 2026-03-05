@@ -102,7 +102,7 @@ def main():
             print(f"  ⚠ No results found in {output_file}")
     
     if not all_results:
-        print("\n❌ No results found. Run extraction scripts first!")
+        print("\nNo results found. Run extraction scripts first!")
         return
     
     # Create DataFrame
@@ -116,7 +116,7 @@ def main():
         df.to_excel(MASTER_EXCEL_PATH, index=False, sheet_name='D-Metrics')
         print(f"\n✓ Saved {len(df)} results to: {MASTER_EXCEL_PATH}")
     except PermissionError:
-        print(f"\n❌ Could not save to {MASTER_EXCEL_PATH}")
+        print(f"\nCould not save to {MASTER_EXCEL_PATH}")
         print("   Please close the Excel file if it is open!")
         return
     

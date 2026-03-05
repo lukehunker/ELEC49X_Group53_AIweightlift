@@ -192,13 +192,13 @@ def run():
     # Save the LightGBM Model
     model_save_path = "../Train_Outputs/lgb_rpe_predictor.txt"
     final_model.save_model(model_save_path)
-    print(f"✅ Model saved to: {model_save_path}")
+    print(f"Model saved to: {model_save_path}")
 
     # CRITICAL: Save the LabelEncoder
     # The app needs this to know that "Bench Press" = 0 (or whatever number it learned)
     encoder_save_path = "../Train_Outputs/lift_type_encoder.pkl"
     joblib.dump(le, encoder_save_path)
-    print(f"✅ LabelEncoder saved to: {encoder_save_path}")
+    print(f"LabelEncoder saved to: {encoder_save_path}")
 
 if __name__ == "__main__":
     run()

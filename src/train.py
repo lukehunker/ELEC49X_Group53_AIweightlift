@@ -2,7 +2,7 @@ import subprocess
 import os
 import sys
 import Bar_Tracking.barspeed_to_excel as BST
-import OpenFace.test_openface as OF
+# import OpenFace.test_openface as OF  # No longer needed - use test_openface_batch.py directly
 import MasterResultsMaker as M
 import LGBM_Regressor.LGBMTrain011123 as LGBM
 import MMPose.dmetrics_to_excel as D
