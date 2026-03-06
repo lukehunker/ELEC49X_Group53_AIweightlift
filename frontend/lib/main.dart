@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'services/rpe_api_service.dart';
 
 void main() {
   runApp(const RPEasyApp());
@@ -228,11 +230,77 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
   AppState _currentState = AppState.idle;
   String _selectedLift = 'Squat';
   final List<String> _lifts = ['Squat', 'Bench Press', 'Deadlift'];
+  final ImagePicker _picker = ImagePicker();
+  
+  // API response data
+  Map<String, dynamic>? _predictionData;
+  String? _errorMessage;
 
-  void _simulateVideoUpload() async {
-    setState(() => _currentState = AppState.processing);
-    await Future.delayed(const Duration(seconds: 3));
-    setState(() => _currentState = AppState.result);
+  Future<void> _pickAndUploadVideo() async {
+    try {
+      // Reset error
+      setState(() {
+        _errorMessage = null;
+      });
+      
+      // Pick video from gallery
+      final XFile? videoFile = await _picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 5),
+      );
+      
+      if (videoFile == null) {
+        // User cancelled
+        return;
+      }
+      
+      // Show processing state
+      setState(() => _currentState = AppState.processing);
+      
+      // Call API
+      try {
+        final result = await RPEApiService.predictRPE(
+          videoPath: videoFile.path,
+          liftType: _selectedLift,
+        );
+        
+        // Success - show results
+        setState(() {
+          _predictionData = result;
+          _currentState = AppState.result;
+        });
+        
+      } catch (e) {
+        // API error
+        setState(() {
+          _errorMessage = e.toString();
+          _currentState = AppState.idle;
+        });
+        
+        // Show error dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Prediction Failed'),
+              content: Text(_errorMessage ?? 'Unknown error'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+      
+    } catch (e) {
+      print('Error picking video: $e');
+      setState(() {
+        _errorMessage = 'Failed to pick video: $e';
+      });
+    }
   }
 
   void _resetApp() {
@@ -321,7 +389,7 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: _simulateVideoUpload,
+              onTap: _pickAndUploadVideo,
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -359,6 +427,11 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
   }
 
   Widget _buildResultView({Key? key}) {
+    // Extract data from API response
+    final rpe = _predictionData?['predicted_rpe']?.toString() ?? '0.0';
+    final confidence = (_predictionData?['confidence'] ?? 0.0) * 100;
+    final repCount = _predictionData?['features']?['bar_speed']?['rep_count'] ?? 0;
+    
     return Center(
       key: key,
       child: Column(
@@ -371,6 +444,8 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
           ),
           const SizedBox(height: 24),
           Text('$_selectedLift Analyzed', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey)),
+          const SizedBox(height: 8),
+          Text('$repCount reps detected', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
           const SizedBox(height: 24),
           
           // Premium Result Card
@@ -381,11 +456,13 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
               borderRadius: BorderRadius.circular(32),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24, offset: const Offset(0, 12))],
             ),
-            child: const Column(
+            child: Column(
               children: [
-                Text('Predicted RPE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1)),
-                SizedBox(height: 8),
-                Text('8.5', style: TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Color(0xFF1E88E5), letterSpacing: -3, height: 1)),
+                const Text('Predicted RPE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1)),
+                const SizedBox(height: 8),
+                Text(rpe, style: const TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Color(0xFF1E88E5), letterSpacing: -3, height: 1)),
+                const SizedBox(height: 12),
+                Text('${confidence.toStringAsFixed(0)}% confidence', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
               ],
             ),
           ),
@@ -393,7 +470,7 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
           
           // Insights Button
           ElevatedButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => InsightsScreen(liftName: _selectedLift))),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => InsightsScreen(liftName: _selectedLift, predictionData: _predictionData))),
             icon: const Icon(Icons.insights_rounded),
             label: const Text('View Form Breakdown'),
             style: ElevatedButton.styleFrom(
@@ -535,7 +612,8 @@ class ProfileTab extends StatelessWidget {
 // ==========================================
 class InsightsScreen extends StatelessWidget {
   final String liftName;
-  const InsightsScreen({super.key, required this.liftName});
+  final Map<String, dynamic>? predictionData;
+  const InsightsScreen({super.key, required this.liftName, this.predictionData});
 
   @override
   Widget build(BuildContext context) {
@@ -568,16 +646,37 @@ class InsightsScreen extends StatelessWidget {
             const Text('Mechanics Output', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
             const SizedBox(height: 16),
 
-            _buildMetricCard(icon: Icons.speed_rounded, title: 'Bar Speed (MMDetection)', value: '0.24 m/s', status: 'Slight Velocity Drop', statusColor: Colors.orange),
-            _buildMetricCard(icon: Icons.accessibility_new_rounded, title: 'Pose Estimation (MMPose)', value: '80° Knee Angle', status: 'Full Range of Motion', statusColor: Colors.green),
-            _buildMetricCard(icon: Icons.face_rounded, title: 'Facial Strain (OpenFace)', value: 'AU04, AU07 Spiked', status: 'High Effort Detected', statusColor: Colors.redAccent),
+            _buildMetricCard(
+              icon: Icons.speed_rounded, 
+              title: 'Bar Speed', 
+              value: predictionData?['features']?['bar_speed']?['rep_count']?.toString() ?? 'N/A',
+              valueLabel: 'reps',
+              status: 'Detected', 
+              statusColor: Colors.green
+            ),
+            _buildMetricCard(
+              icon: Icons.accessibility_new_rounded, 
+              title: 'Pose Estimation (MMPose)', 
+              value: predictionData?['features']?['posture']?['d_value']?.toStringAsFixed(2) ?? 'N/A',
+              valueLabel: 'D-metric',
+              status: predictionData?['features']?['posture'] != null ? 'Analyzed' : 'Unavailable', 
+              statusColor: predictionData?['features']?['posture'] != null ? Colors.green : Colors.grey
+            ),
+            _buildMetricCard(
+              icon: Icons.face_rounded, 
+              title: 'Facial Strain (OpenFace)', 
+              value: (predictionData?['features']?['facial']?['detection_rate'] ?? 0).toStringAsFixed(1),
+              valueLabel: '% detected',
+              status: 'Analyzed', 
+              statusColor: Colors.green
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMetricCard({required IconData icon, required String title, required String value, required String status, required Color statusColor}) {
+  Widget _buildMetricCard({required IconData icon, required String title, required String value, String? valueLabel, required String status, required Color statusColor}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -601,7 +700,15 @@ class InsightsScreen extends StatelessWidget {
                 children: [
                   Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey.shade600)),
                   const SizedBox(height: 4),
-                  Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+                  Row(
+                    children: [
+                      Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+                      if (valueLabel != null) ...[
+                        const SizedBox(width: 4),
+                        Text(valueLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),

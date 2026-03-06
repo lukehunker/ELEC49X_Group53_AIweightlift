@@ -25,7 +25,7 @@ except ImportError:
 
 
 def extract_facial_features(video_path, verbose=True, use_pose_guidance=True, 
-                            sample_fps=10, max_only=True, visualize=False, save_overlay=True):
+                            sample_fps=10, max_only=True, visualize=False):
     """
     Extract facial expression features from a single video using OpenFace.
     
@@ -36,14 +36,12 @@ def extract_facial_features(video_path, verbose=True, use_pose_guidance=True,
         sample_fps (int): Sample rate for feature extraction (default: 10)
         max_only (bool): Extract only max features (default: True)
         visualize (bool): Display video with landmarks overlay (default: False)
-        save_overlay (bool): Save overlay video with landmarks (default: True)
     
     Returns:
         dict: Feature dictionary with keys:
             - detection_rate: Face detection success rate (0.0 to 1.0)
             - AU features: Action Unit intensity features (mean, max, std, range, etc.)
                           Examples: 'AU04_r_max', 'AU06_r_mean', 'AU12_r_std'
-            - overlay_video: Path to overlay video (if save_overlay=True)
             - metadata: Dictionary with video metadata
                 - video_name: Name of the video file
                 - width, height: Video dimensions
@@ -81,8 +79,7 @@ def extract_facial_features(video_path, verbose=True, use_pose_guidance=True,
         use_pose_guidance=use_pose_guidance,
         sample_fps=sample_fps,
         max_only=max_only,
-        visualize=visualize,
-        save_overlay=save_overlay
+        visualize=visualize
     )
     
     # Extract features
