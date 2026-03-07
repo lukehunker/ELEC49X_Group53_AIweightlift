@@ -17,6 +17,7 @@ import cv2
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from scipy.stats import skew, kurtosis
 import warnings
 warnings.filterwarnings('ignore')
 

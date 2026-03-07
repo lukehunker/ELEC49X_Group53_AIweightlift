@@ -7,7 +7,7 @@ class RPEApiService {
   // - Android Emulator: 'http://10.0.2.2:8000' (emulator's special address for host)
   // - Windows Desktop: 'http://localhost:8000'
   // - Deployed: 'https://your-render-app.onrender.com'
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'http://localhost:8000';
   
   /// Check if the API server is healthy
   static Future<bool> checkHealth() async {

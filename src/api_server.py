@@ -212,7 +212,7 @@ async def predict_rpe(
             "features": {
                 "bar_speed": result['features'].get('bar_speed'),
                 "facial": {
-                    k: v for k, v in result['features'].get('facial', {}).items()
+                    k: v for k, v in (result['features'].get('facial') or {}).items()
                     if not k.startswith('metadata_')
                 },
                 "posture": result['features'].get('posture'),
