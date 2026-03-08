@@ -2,8 +2,9 @@
 # Stop script on first error
 set -e
 
-echo "Upgrading pip and core build tools..."
-pip install --upgrade pip setuptools wheel
+echo "Upgrading pip and installing setuptools < 70 to keep pkg_resources for MMCV..."
+pip install --upgrade pip
+pip install "setuptools<70.0.0" wheel
 
 echo "Installing PyTorch CPU (required by mim to find the right MMCV wheel)..."
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
