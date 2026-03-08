@@ -27,12 +27,15 @@ print(f"[INFO] Master Excel: {MASTER_EXCEL_PATH}")
 # Note: Pixels per CM is less critical for time, but kept for depth calcs
 PIXELS_PER_CM = 10.0
 
+import torch
+
 # ---------------------------------------------------------
 # MMPose inferencer
 # ---------------------------------------------------------
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 inferencer = MMPoseInferencer(
     pose2d="body",
-    device="cuda:0"
+    device=device
 )
 
 LEFT_WRIST_IDX = 9
