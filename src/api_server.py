@@ -260,10 +260,12 @@ async def batch_predict():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
     print("\n" + "="*70)
     print("  AI WEIGHTLIFT COACH API SERVER")
     print("="*70)
-    print("\nStarting server on http://0.0.0.0:8000")
-    print("API docs available at http://0.0.0.0:8000/docs")
+    print("\nStarting server...")
+    print("API docs available at /docs")
     print("\nPress CTRL+C to stop\n")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
