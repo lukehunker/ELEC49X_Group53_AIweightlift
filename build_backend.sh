@@ -12,5 +12,8 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 echo "Installing mmcv via explicit pre-compiled wheel link..."
 pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
 
+echo "Bypassing build isolation for chumpy (mmpose dependency) to avoid pip import error..."
+pip install chumpy --no-build-isolation
+
 echo "Installing remaining requirements..."
 pip install -r requirements.txt
