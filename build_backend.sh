@@ -7,7 +7,7 @@ pip install --upgrade pip
 pip install "setuptools<70.0.0" wheel
 
 echo "Installing PyTorch CPU (required by mim to find the right MMCV wheel)..."
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install torch==2.1.0+cpu torchvision==0.16.0+cpu --index-url https://download.pytorch.org/whl/cpu
 
 echo "Installing mmcv via explicit pre-compiled wheel link..."
 pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
