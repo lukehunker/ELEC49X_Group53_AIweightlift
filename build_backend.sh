@@ -5,6 +5,9 @@ set -e
 echo "Upgrading pip and core build tools..."
 pip install --upgrade pip setuptools wheel
 
+echo "Installing PyTorch CPU (required by mim to find the right MMCV wheel)..."
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
 echo "Installing openmim..."
 pip install openmim
 
