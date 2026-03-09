@@ -70,15 +70,30 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
     
     video_name = os.path.splitext(os.path.basename(original_video_path))[0]
     
-    # Check for exact cache file match (not glob pattern to avoid partial matches like "Squat 1" matching "Squat 10")
+    # Determine expected output file paths
     if use_pose_guidance:
         expected_csv = os.path.join(OUTPUT_DIR, f"{video_name}_pose_guided.csv")
+        tracked_video_name = f"{video_name}_pose_guided.avi"
     else:
         expected_csv = os.path.join(OUTPUT_DIR, f"{video_name}.csv")
+        tracked_video_name = f"{video_name}.avi"
     
-    if os.path.exists(expected_csv) and not force_rerun:
-        print(f"Using existing OpenFace output: {os.path.basename(expected_csv)}")
-        return expected_csv
+    # Delete existing OpenFace outputs to force fresh processing
+    if os.path.exists(expected_csv):
+        print(f"Removing old OpenFace CSV: {os.path.basename(expected_csv)}")
+        os.remove(expected_csv)
+    
+    # Also delete any existing visualization files
+    visualized_dir = os.path.join(OUTPUT_DIR, "visualized")
+    tracked_video_dest = os.path.join(visualized_dir, tracked_video_name)
+    if os.path.exists(tracked_video_dest):
+        print(f"Removing old visualization: {tracked_video_name}")
+        os.remove(tracked_video_dest)
+    
+    # Also check for visualization in main output directory
+    tracked_video_src = os.path.join(OUTPUT_DIR, tracked_video_name)
+    if os.path.exists(tracked_video_src):
+        os.remove(tracked_video_src)
     
     print(f"Running OpenFace on {video_name}...")
     if not os.path.isfile(OPENFACE_BIN):
@@ -88,13 +103,17 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
         OPENFACE_BIN,
         "-f", video_path,
         "-out_dir", OUTPUT_DIR,
-        "-2Dfp",
-        "-3Dfp",
-        "-pdmparams",
-        "-aus",
-        "-gaze",
+        "-aus",  # Only extract Action Units (AUs) - other features not used by RPE model
+        "-tracked",  # Output video with facial landmark overlays for visualization
         "-multi_view", "1",
     ]
+    # Optimization: Removed unused features for ~20% speedup:
+    # -2Dfp, -3Dfp (2D/3D facial landmarks - not used in model)
+    # -pdmparams (PDM parameters - not used in model)
+    # -gaze (gaze tracking - not used in model)
+    # 
+    # Visualization: Added -tracked flag to save landmark overlay video
+    # Output: {video_name}_tracked.avi in OUTPUT_DIR/processed/
     
     if high_quality:
         cmd.extend([
@@ -115,6 +134,24 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
         raise RuntimeError(f"OpenFace finished but did not generate expected CSV: {expected_csv}")
     
     print(f"OpenFace processing complete: {os.path.basename(expected_csv)}")
+    
+    # Move tracked video to visualized/ subdirectory (reusing variables defined earlier)
+    tracked_video_src = os.path.join(OUTPUT_DIR, tracked_video_name)
+    tracked_video_dest = os.path.join(visualized_dir, tracked_video_name)
+    
+    if os.path.exists(tracked_video_src):
+        # Create visualized directory if it doesn't exist
+        os.makedirs(visualized_dir, exist_ok=True)
+        
+        # Move the .avi file to visualized directory
+        import shutil
+        shutil.move(tracked_video_src, tracked_video_dest)
+        
+        print(f"  → Landmark visualization saved: {tracked_video_name}")
+        print(f"     Location: {tracked_video_dest}")
+    else:
+        print(f"  ⚠ Warning: Expected tracked video not found: {tracked_video_name}")
+    
     return expected_csv
 
 

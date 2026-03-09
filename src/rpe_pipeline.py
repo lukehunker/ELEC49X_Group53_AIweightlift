@@ -357,12 +357,15 @@ class RPEPredictor:
                     combined['confidence_mean'] = value
                 elif 'confidence' in key and 'std' in key:
                     combined['confidence_std'] = value
+                elif 'confidence' in key and 'min' in key:
+                    combined['confidence_min'] = value
         
         # If no facial features, set defaults
         if not au_values:
             combined['detection_rate'] = 0.5
             combined['confidence_mean'] = 0.5
             combined['confidence_std'] = 0.1
+            combined['confidence_min'] = 0.3
         
         # AU Aggregations (feature engineering)
         if au_values:
@@ -370,11 +373,15 @@ class RPEPredictor:
             combined['AU_mean'] = np.mean(au_values)
             combined['AU_max'] = max(au_values)
             combined['AU_std'] = np.std(au_values) if len(au_values) > 1 else 0
+            
+            # Count of highly active AUs (intensity > 2.0, indicating strong activation)
+            combined['au_highly_active_count'] = sum(1 for au in au_values if au > 2.0)
         else:
             combined['AU_sum'] = 0
             combined['AU_mean'] = 0
             combined['AU_max'] = 0
             combined['AU_std'] = 0
+            combined['au_highly_active_count'] = 0
         
         # AU Interactions (key feature engineering from training)
         if 'AU04_max' in combined and 'AU07_max' in combined:
@@ -406,6 +413,8 @@ class RPEPredictor:
                 combined['body_face_strain'] = d_value * combined['AU_sum']
             if 'AU_mean' in combined:
                 combined['d_value_x_AU_mean'] = d_value * combined['AU_mean']
+            if 'au_highly_active_count' in combined:
+                combined['d_value_x_active_AUs'] = d_value * combined['au_highly_active_count']
             
             # Also keep rep_count from posture as backup
             if 'rep_count' not in combined or combined['rep_count'] == 0:
@@ -431,6 +440,11 @@ class RPEPredictor:
                 combined['AU_sum_per_rep'] = combined['AU_sum'] / (combined['rep_count'] + 1)
             if 'd_value' in combined:
                 combined['d_value_per_rep'] = combined['d_value'] / (combined['rep_count'] + 1)
+            
+            # Combined strain per rep (facial + body)
+            if 'AU_sum' in combined and 'd_value' in combined:
+                total_strain = combined['AU_sum'] + combined['d_value']
+                combined['strain_per_rep'] = total_strain / (combined['rep_count'] + 1)
         
         # Lift type encoding (0=Bench, 1=Squat, 2=Deadlift)
         movement_encoding = {

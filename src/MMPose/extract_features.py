@@ -148,6 +148,36 @@ def extract_posture_features(video_path, movement=None, output_dir=None, device=
         
         print(f"  ✓ Keypoints saved to: {os.path.basename(keypoints_file)}")
         
+        # Step 1.5: Generate visualization overlay video
+        # Get project root and create visualization output directory
+        project_root = Path(__file__).parent.parent.parent
+        vis_output_dir = project_root / "output" / "mmpose" / "visualized"
+        vis_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        overlay_filename = f"{video_name}_overlay.mp4"
+        overlay_path = vis_output_dir / overlay_filename
+        
+        show_video_script = os.path.join(script_dir, "show_video.py")
+        if os.path.exists(show_video_script):
+            overlay_cmd = [
+                sys.executable,
+                show_video_script,
+                os.path.abspath(video_path),
+                "--json", os.path.abspath(keypoints_file),
+                "--out", str(overlay_path)
+            ]
+            
+            overlay_result = subprocess.run(
+                overlay_cmd,
+                cwd=script_dir,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if overlay_result.returncode == 0 and overlay_path.exists():
+                print(f"  ✓ Visualization saved: {overlay_filename}")
+        
         # Step 2: Compute D-metric from keypoints
         print(f"[2/2] Computing D-metric (postural deviation)...")
         preprocess_script = os.path.join(script_dir, f"preprocess_{movement_internal}.py")
@@ -233,6 +263,10 @@ def extract_posture_features(video_path, movement=None, output_dir=None, device=
             'first_rep_frames': first_rep,
             'last_rep_frames': last_rep,
         }
+        
+        # Add visualization path if it was created
+        if overlay_path.exists():
+            features['visualization_path'] = str(overlay_path)
         
         # Keep keypoints file path if not using temp dir
         if not cleanup_temp:

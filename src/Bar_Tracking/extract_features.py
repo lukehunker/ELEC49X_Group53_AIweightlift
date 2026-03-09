@@ -14,6 +14,8 @@ Usage:
 
 import os
 import tempfile
+import shutil
+from pathlib import Path
 from . import barspeed_to_excel as bst
 
 
@@ -77,9 +79,26 @@ def extract_bar_speed(video_path, movement=None, output_dir=None):
     else:
         os.makedirs(output_dir, exist_ok=True)
     
+    # Determine visualization output directory
+    script_dir = Path(__file__).parent.parent.parent  # Project root
+    vis_output_dir = script_dir / "output" / "bar_tracking" / "visualized"
+    vis_output_dir.mkdir(parents=True, exist_ok=True)
+    
     try:
         # Process video using existing function
         features = bst.process_video(video_path, movement, output_dir)
+        
+        # Move visualization video to centralized output directory
+        if features:
+            video_basename = os.path.splitext(os.path.basename(video_path))[0]
+            vis_filename = f"{movement}__{video_basename}__wrist_vis.mp4"
+            vis_src = os.path.join(output_dir, vis_filename)
+            vis_dest = vis_output_dir / vis_filename
+            
+            if os.path.exists(vis_src):
+                shutil.move(vis_src, vis_dest)
+                features['visualization_path'] = str(vis_dest)
+        
         return features
     except Exception as e:
         print(f"Error extracting bar speed features: {e}")
@@ -90,7 +109,6 @@ def extract_bar_speed(video_path, movement=None, output_dir=None):
         # Clean up temp directory if we created it
         if cleanup_temp:
             try:
-                import shutil
                 shutil.rmtree(output_dir, ignore_errors=True)
             except:
                 pass
