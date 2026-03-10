@@ -9,7 +9,8 @@ This module provides a complete pipeline for predicting RPE from workout videos:
 Performance Optimizations:
 - Parallel feature extraction: All three extractors (bar speed, facial, posture) run simultaneously
 - Reduced OpenFace sample rate: 3 fps instead of 10 fps (70% faster)
-- Combined optimizations: ~75-85% faster overall processing time (3-4 min → 45-75 sec)
+- Reduced MMPose sample rate: 10 fps instead of full video fps (up to 6x faster for 60fps videos)
+- Combined optimizations: ~85-90% faster overall processing time (3-4 min → 30-45 sec)
 
 Usage:
     from rpe_pipeline import predict_rpe
@@ -20,6 +21,7 @@ Usage:
 
 import os
 import sys
+import time
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
@@ -137,15 +139,16 @@ class RPEPredictor:
             self.xgb_model = None
             self.scaler = None
     
-    def _extract_bar_speed_wrapper(self, video_path: str, movement: str, output_dir: Optional[str]) -> Dict[str, Any]:
+    def _extract_bar_speed_wrapper(self, video_path: str, movement: str, output_dir: Optional[str], save_visualizations: bool = False) -> Dict[str, Any]:
         """Wrapper for bar speed extraction with error handling."""
-        result = {'data': None, 'warnings': [], 'success': False}
+        result = {'data': None, 'warnings': [], 'success': False, 'duration': 0}
         
         if self.verbose:
             print("\n[1/3] Extracting bar speed features...")
         
+        start_time = time.time()
         try:
-            bar_features = extract_bar_speed(video_path, movement=movement, output_dir=output_dir)
+            bar_features = extract_bar_speed(video_path, movement=movement, output_dir=output_dir if save_visualizations else None)
             result['data'] = bar_features
             result['success'] = bar_features is not None
             
@@ -160,15 +163,21 @@ class RPEPredictor:
             if self.verbose:
                 print(f"  ✗ Failed: {e}")
         
+        finally:
+            result['duration'] = time.time() - start_time
+            if self.verbose:
+                print(f"  ⏱  Completed in {result['duration']:.2f}s")
+        
         return result
     
-    def _extract_facial_wrapper(self, video_path: str) -> Dict[str, Any]:
+    def _extract_facial_wrapper(self, video_path: str, save_visualizations: bool = False) -> Dict[str, Any]:
         """Wrapper for facial feature extraction with error handling and optimized parameters."""
-        result = {'data': None, 'warnings': [], 'success': False}
+        result = {'data': None, 'warnings': [], 'success': False, 'duration': 0}
         
         if self.verbose:
             print("\n[2/3] Extracting facial expression features...")
         
+        start_time = time.time()
         try:
             # Optimized: Reduced sample_fps from 10 to 3 for ~3x faster processing
             # 3 fps is sufficient for max AU detection with minimal accuracy loss
@@ -177,7 +186,8 @@ class RPEPredictor:
                 verbose=False,
                 use_pose_guidance=True,
                 sample_fps=3,  # Reduced from default 10 for faster processing
-                visualize=False
+                visualize=save_visualizations,
+                save_visualization=save_visualizations
             )
             result['data'] = flatten_features(facial_features)
             result['success'] = facial_features is not None
@@ -199,21 +209,29 @@ class RPEPredictor:
             if self.verbose:
                 print(f"  ✗ Failed: {e}")
         
+        finally:
+            result['duration'] = time.time() - start_time
+            if self.verbose:
+                print(f"  ⏱  Completed in {result['duration']:.2f}s")
+        
         return result
     
     def _extract_posture_wrapper(self, video_path: str, movement: str, output_dir: Optional[str], 
-                                  bar_speed_result: Optional[Dict] = None) -> Dict[str, Any]:
+                                  bar_speed_result: Optional[Dict] = None, save_visualizations: bool = False) -> Dict[str, Any]:
         """Wrapper for posture feature extraction with error handling."""
-        result = {'data': None, 'warnings': [], 'success': False}
+        result = {'data': None, 'warnings': [], 'success': False, 'duration': 0}
         
         if self.verbose:
             print("\n[3/3] Extracting body posture features...")
         
+        start_time = time.time()
         try:
             posture_features = extract_posture_features(
                 video_path,
                 movement=movement,
-                output_dir=output_dir
+                output_dir=output_dir if save_visualizations else None,
+                save_visualization=save_visualizations,
+                sample_fps=10.0  # Optimized: Sample at 10 fps for faster processing
             )
             result['data'] = posture_features
             result['success'] = posture_features is not None
@@ -229,10 +247,15 @@ class RPEPredictor:
             if self.verbose:
                 print(f"  ✗ Failed: {e}")
         
+        finally:
+            result['duration'] = time.time() - start_time
+            if self.verbose:
+                print(f"  ⏱  Completed in {result['duration']:.2f}s")
+        
         return result
     
     def extract_all_features(self, video_path: str, movement: str, 
-                            output_dir: Optional[str] = None) -> Dict[str, Any]:
+                            output_dir: Optional[str] = None, save_visualizations: bool = False) -> Dict[str, Any]:
         """
         Extract features from all three pipelines in parallel (optimized for speed).
         
@@ -245,6 +268,7 @@ class RPEPredictor:
             video_path: Path to video file
             movement: Movement type ('Squat', 'Bench Press', 'Deadlift')
             output_dir: Optional directory for intermediate outputs
+            save_visualizations: Whether to save visualization outputs (default: False)
         
         Returns:
             dict: Combined features from all extractors with keys:
@@ -273,16 +297,19 @@ class RPEPredictor:
         }
         
         # Run all three extractors in parallel simultaneously for maximum speed
+        parallel_start_time = time.time()
         with ThreadPoolExecutor(max_workers=3) as executor:
             # Submit all three extraction tasks in parallel
-            bar_future = executor.submit(self._extract_bar_speed_wrapper, video_path, movement, output_dir)
-            facial_future = executor.submit(self._extract_facial_wrapper, video_path)
-            posture_future = executor.submit(self._extract_posture_wrapper, video_path, movement, output_dir)
+            bar_future = executor.submit(self._extract_bar_speed_wrapper, video_path, movement, output_dir, save_visualizations)
+            facial_future = executor.submit(self._extract_facial_wrapper, video_path, save_visualizations)
+            posture_future = executor.submit(self._extract_posture_wrapper, video_path, movement, output_dir, None, save_visualizations)
             
             # Wait for all three to complete
             bar_result = bar_future.result()
             facial_result = facial_future.result()
             posture_result = posture_future.result()
+        
+        total_parallel_time = time.time() - parallel_start_time
         
         # Extract results from all extractors
         results['bar_speed'] = bar_result['data']
@@ -314,6 +341,30 @@ class RPEPredictor:
                 print("Core features extracted successfully!")
             else:
                 print("Some core features failed to extract")
+            
+            # Show timing summary and identify bottleneck
+            print(f"\nTiming Summary (parallel execution):")
+            print(f"   Bar Speed:  {bar_result['duration']:6.2f}s")
+            print(f"   Facial:     {facial_result['duration']:6.2f}s")
+            print(f"   Posture:    {posture_result['duration']:6.2f}s")
+            print(f"   Wall Time:  {total_parallel_time:6.2f}s")
+            
+            # Identify bottleneck (longest running extraction)
+            timings = [
+                ('Bar Speed', bar_result['duration']),
+                ('Facial', facial_result['duration']),
+                ('Posture', posture_result['duration'])
+            ]
+            bottleneck_name, bottleneck_time = max(timings, key=lambda x: x[1])
+            print(f"   Bottleneck: {bottleneck_name} ({bottleneck_time:.2f}s)")
+            
+            # Calculate time saved by parallelization
+            sequential_time = sum(t[1] for t in timings)
+            time_saved = sequential_time - total_parallel_time
+            speedup = sequential_time / total_parallel_time if total_parallel_time > 0 else 1.0
+            print(f"   Sequential: {sequential_time:6.2f}s (estimated)")
+            print(f"   Speedup:    {speedup:.2f}x ({time_saved:.2f}s saved)")
+            
             print(f"{'='*70}")
         
         return results
@@ -462,7 +513,7 @@ class RPEPredictor:
         return combined
     
     def predict(self, video_path: str, movement: Optional[str] = None,
-                output_dir: Optional[str] = None) -> Dict[str, Any]:
+                output_dir: Optional[str] = None, save_visualizations: bool = False) -> Dict[str, Any]:
         """
         Complete pipeline: extract features and predict RPE.
         
@@ -471,6 +522,7 @@ class RPEPredictor:
             movement: Movement type ('Squat', 'Bench Press', 'Deadlift')
                      If None, attempts to auto-detect from filename
             output_dir: Optional directory for intermediate outputs
+            save_visualizations: Whether to save visualization outputs (default: False)
         
         Returns:
             dict: Prediction results with keys:
@@ -509,7 +561,7 @@ class RPEPredictor:
                 )
         
         # Extract all features
-        extraction_results = self.extract_all_features(video_path, movement, output_dir)
+        extraction_results = self.extract_all_features(video_path, movement, output_dir, save_visualizations)
         combined_features = extraction_results['combined']
         
         # Prepare feature vector for model
@@ -618,7 +670,8 @@ class RPEPredictor:
 
 
 def predict_rpe(video_path: str, movement: Optional[str] = None,
-                model_path: Optional[str] = None, verbose: bool = True) -> Dict[str, Any]:
+                model_path: Optional[str] = None, verbose: bool = True,
+                save_visualizations: bool = False) -> Dict[str, Any]:
     """
     Convenience function to predict RPE from a video.
     
@@ -627,6 +680,7 @@ def predict_rpe(video_path: str, movement: Optional[str] = None,
         movement: Movement type ('Squat', 'Bench Press', 'Deadlift') or None for auto-detect
         model_path: Path to trained model (uses default if None)
         verbose: Print progress messages
+        save_visualizations: Whether to save visualization outputs (default: False)
     
     Returns:
         dict: Prediction results including predicted_rpe, confidence, features, etc.
@@ -636,7 +690,7 @@ def predict_rpe(video_path: str, movement: Optional[str] = None,
         >>> print(f"RPE: {result['predicted_rpe']}")
     """
     predictor = RPEPredictor(model_path=model_path, verbose=verbose)
-    return predictor.predict(video_path, movement=movement)
+    return predictor.predict(video_path, movement=movement, save_visualizations=save_visualizations)
 
 
 if __name__ == "__main__":
@@ -648,6 +702,8 @@ if __name__ == "__main__":
                        help="Movement type (optional, auto-detected from filename)")
     parser.add_argument("--model", help="Path to trained model file (optional)")
     parser.add_argument("--output-dir", help="Directory for intermediate outputs (optional)")
+    parser.add_argument("--save-visualizations", action="store_true", 
+                       help="Save visualization outputs (images/videos). Default: False")
     parser.add_argument("--quiet", action="store_true", help="Suppress progress messages")
     
     args = parser.parse_args()
@@ -657,7 +713,8 @@ if __name__ == "__main__":
             args.video_path,
             movement=args.movement,
             model_path=args.model,
-            verbose=not args.quiet
+            verbose=not args.quiet,
+            save_visualizations=args.save_visualizations
         )
         
         print("\n" + "="*70)

@@ -24,7 +24,7 @@ import numpy as np
 from pathlib import Path
 
 
-def extract_posture_features(video_path, movement=None, output_dir=None, device="cuda:0"):
+def extract_posture_features(video_path, movement=None, output_dir=None, device="cuda:0", save_visualization=False, sample_fps=10.0):
     """
     Extract body posture features from a single video.
     
@@ -39,6 +39,9 @@ def extract_posture_features(video_path, movement=None, output_dir=None, device=
         output_dir (str, optional): Directory for intermediate outputs. 
                                    If None, uses a temporary directory
         device (str): Device to run inference on (default: 'cuda:0', can use 'cpu')
+        save_visualization (bool): Save keypoint overlay visualization video (default: False)
+        sample_fps (float): Frame sampling rate for processing (default: 10 fps for faster processing)
+                           Set to 0 to process all frames (slower but most accurate)
     
     Returns:
         dict: Feature dictionary with keys:
@@ -127,7 +130,8 @@ def extract_posture_features(video_path, movement=None, output_dir=None, device=
             os.path.abspath(extraction_script),
             os.path.abspath(video_path),
             "--out", os.path.abspath(keypoints_file),
-            "--device", device
+            "--device", device,
+            "--sample-fps", str(sample_fps)
         ]
         
         result = subprocess.run(
@@ -148,35 +152,37 @@ def extract_posture_features(video_path, movement=None, output_dir=None, device=
         
         print(f"  ✓ Keypoints saved to: {os.path.basename(keypoints_file)}")
         
-        # Step 1.5: Generate visualization overlay video
-        # Get project root and create visualization output directory
-        project_root = Path(__file__).parent.parent.parent
-        vis_output_dir = project_root / "output" / "mmpose" / "visualized"
-        vis_output_dir.mkdir(parents=True, exist_ok=True)
-        
-        overlay_filename = f"{video_name}_overlay.mp4"
-        overlay_path = vis_output_dir / overlay_filename
-        
-        show_video_script = os.path.join(script_dir, "show_video.py")
-        if os.path.exists(show_video_script):
-            overlay_cmd = [
-                sys.executable,
-                show_video_script,
-                os.path.abspath(video_path),
-                "--json", os.path.abspath(keypoints_file),
-                "--out", str(overlay_path)
-            ]
+        # Step 1.5: Generate visualization overlay video (only if requested)
+        overlay_path = None
+        if save_visualization:
+            # Get project root and create visualization output directory
+            project_root = Path(__file__).parent.parent.parent
+            vis_output_dir = project_root / "output" / "mmpose" / "visualized"
+            vis_output_dir.mkdir(parents=True, exist_ok=True)
             
-            overlay_result = subprocess.run(
-                overlay_cmd,
-                cwd=script_dir,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
+            overlay_filename = f"{video_name}_overlay.mp4"
+            overlay_path = vis_output_dir / overlay_filename
             
-            if overlay_result.returncode == 0 and overlay_path.exists():
-                print(f"  ✓ Visualization saved: {overlay_filename}")
+            show_video_script = os.path.join(script_dir, "show_video.py")
+            if os.path.exists(show_video_script):
+                overlay_cmd = [
+                    sys.executable,
+                    show_video_script,
+                    os.path.abspath(video_path),
+                    "--json", os.path.abspath(keypoints_file),
+                    "--out", str(overlay_path)
+                ]
+                
+                overlay_result = subprocess.run(
+                    overlay_cmd,
+                    cwd=script_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=300  # 5 minute timeout
+                )
+                
+                if overlay_result.returncode == 0 and overlay_path.exists():
+                    print(f"  ✓ Visualization saved: {overlay_filename}")
         
         # Step 2: Compute D-metric from keypoints
         print(f"[2/2] Computing D-metric (postural deviation)...")
@@ -265,7 +271,7 @@ def extract_posture_features(video_path, movement=None, output_dir=None, device=
         }
         
         # Add visualization path if it was created
-        if overlay_path.exists():
+        if overlay_path is not None and overlay_path.exists():
             features['visualization_path'] = str(overlay_path)
         
         # Keep keypoints file path if not using temp dir

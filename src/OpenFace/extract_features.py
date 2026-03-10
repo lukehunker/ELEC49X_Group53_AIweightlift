@@ -25,7 +25,7 @@ except ImportError:
 
 
 def extract_facial_features(video_path, verbose=True, use_pose_guidance=True, 
-                            sample_fps=10, max_only=True, visualize=False):
+                            sample_fps=10, max_only=True, visualize=False, save_visualization=False):
     """
     Extract facial expression features from a single video using OpenFace.
     
@@ -36,6 +36,7 @@ def extract_facial_features(video_path, verbose=True, use_pose_guidance=True,
         sample_fps (int): Sample rate for feature extraction (default: 10)
         max_only (bool): Extract only max features (default: True)
         visualize (bool): Display video with landmarks overlay (default: False)
+        save_visualization (bool): Save landmark visualization video to file (default: False)
     
     Returns:
         dict: Feature dictionary with keys:
@@ -79,7 +80,8 @@ def extract_facial_features(video_path, verbose=True, use_pose_guidance=True,
         use_pose_guidance=use_pose_guidance,
         sample_fps=sample_fps,
         max_only=max_only,
-        visualize=visualize
+        visualize=visualize,
+        save_visualization=save_visualization
     )
     
     # Extract features

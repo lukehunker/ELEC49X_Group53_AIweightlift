@@ -52,13 +52,14 @@ class OpenFaceExtractor:
         'AU20_r', 'AU23_r', 'AU25_r', 'AU26_r', 'AU45_r'
     ]
     
-    def __init__(self, verbose=True, use_pose_guidance=True, sample_fps=10, load_minimal_columns=True, max_only=True, visualize=False):
+    def __init__(self, verbose=True, use_pose_guidance=True, sample_fps=10, load_minimal_columns=True, max_only=True, visualize=False, save_visualization=False):
         self.verbose = verbose
         self.use_pose_guidance = use_pose_guidance
         self.sample_fps = sample_fps
         self.load_minimal_columns = load_minimal_columns
         self.max_only = max_only
         self.visualize = visualize
+        self.save_visualization = save_visualization
         self._check_openface()
     
     def _check_openface(self):
@@ -206,7 +207,7 @@ class OpenFaceExtractor:
         self._log(f"Resolution: {metadata['resolution']}, FPS: {metadata['fps']:.1f}, Frames: {metadata['total_frames']}")
         
         # Run OpenFace with pose guidance if enabled
-        csv_path = ofu.run_openface(video_path, use_pose_guidance=self.use_pose_guidance)
+        csv_path = ofu.run_openface(video_path, use_pose_guidance=self.use_pose_guidance, save_visualization=self.save_visualization)
         
         # Visualize if requested (before processing features)
         if self.visualize:

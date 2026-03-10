@@ -13,11 +13,13 @@ parser = argparse.ArgumentParser(description="Extract pose keypoints from video 
 parser.add_argument("video_in", help="Path to input video (mp4)")
 parser.add_argument("--out", default="keypoints.json", help="Output JSON file")
 parser.add_argument("--device", default="cuda:0", help="Device to run inference on (e.g. cuda:0 or cpu)")
+parser.add_argument("--sample-fps", type=float, default=10.0, help="Sample rate for processing (default: 10 fps, 0 = process all frames)")
 args = parser.parse_args()
 
 VIDEO_IN = args.video_in
 JSON_OUT = args.out
 DEVICE = args.device
+SAMPLE_FPS = args.sample_fps
 
 # -----------------------------
 # MMPose init
@@ -353,9 +355,16 @@ if not cap.isOpened():
 n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+video_fps = cap.get(cv2.CAP_PROP_FPS)
 
 if n_frames <= 0:
     n_frames = 0
+
+# Calculate frame skip for sampling
+if SAMPLE_FPS > 0 and video_fps > 0:
+    frame_skip = max(1, int(round(video_fps / SAMPLE_FPS)))
+else:
+    frame_skip = 1  # Process all frames
 
 # -----------------------------
 # Bootstrap from mid-video
@@ -397,12 +406,18 @@ stuck_count = np.zeros(16, dtype=np.int32)
 # -----------------------------
 output = []
 frame_idx = 0
+actual_frame_idx = 0  # Track actual video frame number
 missing = 0
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
+    
+    # Skip frames based on sampling rate
+    if actual_frame_idx % frame_skip != 0:
+        actual_frame_idx += 1
+        continue
 
     # (3) Force periodic full-frame inference, and also when we've been missing for a bit
     force_global = (frame_idx % FULL_REDETECT_EVERY == 0) or (missing >= REDETECT_MISSING_THR)
@@ -454,13 +469,16 @@ while True:
     prev_center = torso_center(chosen)
 
     output.append({
-        "frame_index": frame_idx,
+        "frame_index": actual_frame_idx,  # Use actual video frame number
         "people": [{"keypoints": chosen.tolist()}]
     })
     frame_idx += 1
+    actual_frame_idx += 1
 
 cap.release()
 
+effective_fps = video_fps / frame_skip if frame_skip > 1 else video_fps
+print(f"Processed {frame_idx} frames (~{effective_fps:.1f} fps sampling from ~{video_fps:.1f} fps video)")
 with open(JSON_OUT, "w") as f:
     json.dump(output, f, indent=2)
 

@@ -56,7 +56,7 @@ def get_video_metadata(video_path):
 # =========================================
 # OPENFACE PROCESSING
 # =========================================
-def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guidance=False):
+def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guidance=False, save_visualization=False):
 
     original_video_path = video_path
     if use_pose_guidance and POSE_GUIDANCE_AVAILABLE:
@@ -104,9 +104,12 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
         "-f", video_path,
         "-out_dir", OUTPUT_DIR,
         "-aus",  # Only extract Action Units (AUs) - other features not used by RPE model
-        "-tracked",  # Output video with facial landmark overlays for visualization
         "-multi_view", "1",
     ]
+    
+    # Only add visualization flag if requested
+    if save_visualization:
+        cmd.append("-tracked")  # Output video with facial landmark overlays for visualization
     # Optimization: Removed unused features for ~20% speedup:
     # -2Dfp, -3Dfp (2D/3D facial landmarks - not used in model)
     # -pdmparams (PDM parameters - not used in model)
@@ -135,22 +138,23 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
     
     print(f"OpenFace processing complete: {os.path.basename(expected_csv)}")
     
-    # Move tracked video to visualized/ subdirectory (reusing variables defined earlier)
-    tracked_video_src = os.path.join(OUTPUT_DIR, tracked_video_name)
-    tracked_video_dest = os.path.join(visualized_dir, tracked_video_name)
-    
-    if os.path.exists(tracked_video_src):
-        # Create visualized directory if it doesn't exist
-        os.makedirs(visualized_dir, exist_ok=True)
+    # Move tracked video to visualized/ subdirectory (only if save_visualization is True)
+    if save_visualization:
+        tracked_video_src = os.path.join(OUTPUT_DIR, tracked_video_name)
+        tracked_video_dest = os.path.join(visualized_dir, tracked_video_name)
         
-        # Move the .avi file to visualized directory
-        import shutil
-        shutil.move(tracked_video_src, tracked_video_dest)
-        
-        print(f"  → Landmark visualization saved: {tracked_video_name}")
-        print(f"     Location: {tracked_video_dest}")
-    else:
-        print(f"  ⚠ Warning: Expected tracked video not found: {tracked_video_name}")
+        if os.path.exists(tracked_video_src):
+            # Create visualized directory if it doesn't exist
+            os.makedirs(visualized_dir, exist_ok=True)
+            
+            # Move the .avi file to visualized directory
+            import shutil
+            shutil.move(tracked_video_src, tracked_video_dest)
+            
+            print(f"  → Landmark visualization saved: {tracked_video_name}")
+            print(f"     Location: {tracked_video_dest}")
+        else:
+            print(f"  ⚠ Warning: Expected tracked video not found: {tracked_video_name}")
     
     return expected_csv
 
