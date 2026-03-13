@@ -194,11 +194,12 @@ async def predict_rpe(
         print(f"Processing upload: {video.filename} ({lift_type})")
         print(f"{'='*70}")
         
-        # Run complete prediction pipeline
+        # Run complete prediction pipeline with visualizations enabled
         result = PREDICTOR.predict(
             video_path,
             movement=lift_type,
-            output_dir=temp_dir
+            output_dir=temp_dir,
+            save_visualizations=False  # Enable visualization outputs for all 3 extractors
         )
         
         # Format response for API

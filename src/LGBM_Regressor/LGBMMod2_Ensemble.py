@@ -7,8 +7,13 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import warnings
+from datetime import datetime
 
 warnings.filterwarnings("ignore")
+
+# Generate version timestamp for this training run
+VERSION = datetime.now().strftime("%Y%m%d_%H%M%S")
+print(f"Training version: {VERSION}")
 
 # -----------------------------------------------------------
 # SIMPLE ENSEMBLE: LGBM + XGBoost
@@ -220,6 +225,8 @@ ax1.plot(x_range, m * x_range + b, color="red", linewidth=3, linestyle='--', lab
 
 ax1.set_xlim(0.5, 10.5)
 ax1.set_ylim(0.5, 10.5)
+ax1.set_xticks(range(1, 11))
+ax1.set_yticks(range(1, 11))
 ax1.set_xlabel("True RPE", fontsize=13, fontweight='bold')
 ax1.set_ylabel("Predicted RPE", fontsize=13, fontweight='bold')
 ax1.set_title(f"Ensemble: LGBM(60%) + XGBoost(40%)\nMAE: {ensemble_mae:.4f} | R²: {ensemble_r2:.4f}", 
@@ -254,10 +261,52 @@ ax2.annotate(f'↓ {improvement:.4f}',
             ha='center')
 
 plt.tight_layout()
-plt.savefig('lgbm_ensemble_results.png', dpi=300, bbox_inches='tight')
+plt.savefig(f'lgbm_ensemble_results_{VERSION}.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 print(f"\nEnsemble achieved MAE: {ensemble_mae:.4f}")
+
+# -----------------------------------------------------------
+# VISUALIZATION: PREDICTIONS WITHOUT OUTLIER POINTS DISPLAYED
+# -----------------------------------------------------------
+print("\nCreating cleaner prediction plot (hiding outliers)...")
+
+# Define outliers as predictions with absolute error > 1.5
+absolute_errors = np.abs(np.array(all_y_true) - np.array(all_ensemble_preds))
+outlier_threshold = 1.5  # RPE units
+outlier_mask = absolute_errors <= outlier_threshold
+
+y_true_display = np.array(all_y_true)[outlier_mask]
+preds_display = np.array(all_ensemble_preds)[outlier_mask]
+n_outliers_hidden = len(all_y_true) - len(y_true_display)
+
+# Create plot showing only non-outlier points (but stats use all data)
+fig, ax = plt.subplots(figsize=(10, 10))
+jitter = np.random.normal(0, 0.05, size=len(preds_display))
+ax.scatter(y_true_display, preds_display + jitter, alpha=0.6, color="purple", s=40)
+ax.plot([1, 10], [1, 10], color="orange", linewidth=3, label="Perfect")
+
+m, b = np.polyfit(all_y_true, all_ensemble_preds, 1)
+x_range = np.array([1, 10])
+ax.plot(x_range, m * x_range + b, color="red", linewidth=3, linestyle='--', label=f"Fit: y={m:.2f}x+{b:.2f}")
+
+ax.set_xlim(0.5, 10.5)
+ax.set_ylim(0.5, 10.5)
+ax.set_xticks(range(1, 11))
+ax.set_yticks(range(1, 11))
+ax.set_xlabel("True RPE", fontsize=14, fontweight='bold')
+ax.set_ylabel("Predicted RPE", fontsize=14, fontweight='bold')
+ax.set_title(f"Ensemble Predictions (Cleaner View)\n{n_outliers_hidden} outlier points hidden (|error| > {outlier_threshold})\nMAE: {ensemble_mae:.4f} | R²: {ensemble_r2:.4f}", 
+             fontsize=14, fontweight='bold')
+ax.grid(True, linestyle="--", alpha=0.5)
+ax.legend(fontsize=12)
+
+plt.tight_layout()
+plt.savefig(f'lgbm_ensemble_results_clean_{VERSION}.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+print(f"  Hidden {n_outliers_hidden} outlier points for cleaner visualization")
+print(f"  Statistics still based on ALL data: MAE={ensemble_mae:.4f}, R²={ensemble_r2:.4f}")
 
 # -----------------------------------------------------------
 # TRAIN FINAL MODELS ON FULL DATASET & SAVE
@@ -289,22 +338,23 @@ output_dir = "../Train_Outputs"
 os.makedirs(output_dir, exist_ok=True)
 
 # Save LGBM model
-lgbm_model_path = os.path.join(output_dir, "lgbm_ensemble_model.txt")
+lgbm_model_path = os.path.join(output_dir, f"lgbm_ensemble_model_{VERSION}.txt")
 lgbm_final.booster_.save_model(lgbm_model_path)
 print(f"\nSaved LightGBM model: {lgbm_model_path}")
 
 # Save XGBoost model
-xgb_model_path = os.path.join(output_dir, "xgb_ensemble_model.json")
+xgb_model_path = os.path.join(output_dir, f"xgb_ensemble_model_{VERSION}.json")
 xgb_final.save_model(xgb_model_path)
 print(f"Saved XGBoost model: {xgb_model_path}")
 
 # Save scaler
-scaler_path = os.path.join(output_dir, "ensemble_scaler.pkl")
+scaler_path = os.path.join(output_dir, f"ensemble_scaler_{VERSION}.pkl")
 joblib.dump(scaler_final, scaler_path)
 print(f"Saved scaler: {scaler_path}")
 
 # Save metadata (feature names, ensemble weights, CV performance)
 metadata = {
+    "version": VERSION,
     "feature_columns": numeric_cols,
     "n_features": len(numeric_cols),
     "ensemble_weights": {
@@ -325,21 +375,97 @@ metadata = {
         "min": float(y.min()),
         "max": float(y.max()),
         "mean": float(y.mean())
+    },
+    "model_files": {
+        "lgbm": f"lgbm_ensemble_model_{VERSION}.txt",
+        "xgb": f"xgb_ensemble_model_{VERSION}.json",
+        "scaler": f"ensemble_scaler_{VERSION}.pkl"
     }
 }
 
-metadata_path = os.path.join(output_dir, "ensemble_metadata.json")
+metadata_path = os.path.join(output_dir, f"ensemble_metadata_{VERSION}.json")
 with open(metadata_path, 'w') as f:
     json.dump(metadata, f, indent=2)
 print(f"Saved metadata: {metadata_path}")
+
+# -----------------------------------------------------------
+# VISUALIZATION: FEATURE IMPORTANCE
+# -----------------------------------------------------------
+print("\n" + "=" * 60)
+print("GENERATING FEATURE IMPORTANCE PLOT")
+print("=" * 60)
+
+# Get feature importance from both models
+lgbm_importance = lgbm_final.feature_importances_
+xgb_importance = xgb_final.feature_importances_
+
+# Normalize importances to sum to 1
+lgbm_importance_norm = lgbm_importance / lgbm_importance.sum()
+xgb_importance_norm = xgb_importance / xgb_importance.sum()
+
+# Ensemble importance: weighted average (60% LGBM, 40% XGBoost)
+ensemble_importance = 0.6 * lgbm_importance_norm + 0.4 * xgb_importance_norm
+
+# Create DataFrame for easier sorting
+feature_importance_df = pd.DataFrame({
+    'Feature': numeric_cols,
+    'Importance': ensemble_importance,
+    'LGBM_Importance': lgbm_importance_norm,
+    'XGBoost_Importance': xgb_importance_norm
+})
+
+# Sort by ensemble importance
+feature_importance_df = feature_importance_df.sort_values('Importance', ascending=False)
+
+# Plot top 10 features
+top_n = min(10, len(feature_importance_df))
+top_features = feature_importance_df.head(top_n)
+
+fig, ax = plt.subplots(figsize=(12, 8))
+y_pos = np.arange(len(top_features))
+
+bars = ax.barh(y_pos, top_features['Importance'], color='steelblue', alpha=0.8, edgecolor='black', linewidth=1.5)
+
+ax.set_yticks(y_pos)
+ax.set_yticklabels(top_features['Feature'], fontsize=10)
+ax.invert_yaxis()  # Highest importance at top
+ax.set_xlabel('Ensemble Importance (LGBM 60% + XGBoost 40%)', fontsize=12, fontweight='bold')
+ax.set_title(f'Top {top_n} Most Important Features for RPE Prediction', fontsize=14, fontweight='bold')
+ax.grid(axis='x', linestyle='--', alpha=0.5)
+
+# Add value labels on bars
+for i, (bar, imp) in enumerate(zip(bars, top_features['Importance'])):
+    width = bar.get_width()
+    ax.text(width, bar.get_y() + bar.get_height()/2.,
+            f'{imp:.4f}',
+            ha='left', va='center', fontsize=9, fontweight='bold')
+
+plt.tight_layout()
+feature_importance_path = os.path.join(output_dir, f"lgbm_ensemble_feature_importance_{VERSION}.png")
+plt.savefig(feature_importance_path, dpi=300, bbox_inches='tight')
+plt.show()
+
+print(f"\nSaved feature importance plot: {feature_importance_path}")
+print(f"\nTop 10 most important features:")
+for idx, row in top_features.head(10).iterrows():
+    print(f"  {row['Feature']:30s} - {row['Importance']:.4f}")
+
+# Save full feature importance to CSV
+importance_csv_path = os.path.join(output_dir, f"ensemble_feature_importance_{VERSION}.csv")
+feature_importance_df.to_csv(importance_csv_path, index=False)
+print(f"\nSaved full feature importance: {importance_csv_path}")
 
 print("\n" + "=" * 60)
 print("MODEL SAVING COMPLETE")
 print("=" * 60)
 print(f"\nSaved files in: {output_dir}/")
-print(f"  - lgbm_ensemble_model.txt (LightGBM)")
-print(f"  - xgb_ensemble_model.json (XGBoost)")
-print(f"  - ensemble_scaler.pkl (StandardScaler)")
-print(f"  - ensemble_metadata.json (Feature names & config)")
-print(f"\nThese models can now be loaded by rpe_pipeline.py for predictions!")
+print(f"  - lgbm_ensemble_model_{VERSION}.txt (LightGBM)")
+print(f"  - xgb_ensemble_model_{VERSION}.json (XGBoost)")
+print(f"  - ensemble_scaler_{VERSION}.pkl (StandardScaler)")
+print(f"  - ensemble_metadata_{VERSION}.json (Feature names & config)")
+print(f"  - lgbm_ensemble_results_{VERSION}.png (Visualization)")
+print(f"  - lgbm_ensemble_results_clean_{VERSION}.png (Clean view)")
+print(f"  - lgbm_ensemble_feature_importance_{VERSION}.png (Feature importance)")
+print(f"  - ensemble_feature_importance_{VERSION}.csv (Importance data)")
+print(f"\nTo use these models in rpe_pipeline.py, update the model paths to version {VERSION}")
 print("=" * 60)
