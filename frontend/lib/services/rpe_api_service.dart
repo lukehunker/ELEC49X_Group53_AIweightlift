@@ -101,6 +101,55 @@ class RPEApiService {
       throw Exception('Prediction failed: $e');
     }
   }
+
+  /// Fetch recent RPE history records from backend
+  static Future<List<Map<String, dynamic>>> fetchHistory({int limit = 50}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/history?limit=$limit'),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to fetch history (status ${response.statusCode})');
+      }
+
+      final data = json.decode(response.body);
+      final records = (data['records'] as List?) ?? [];
+
+      return records
+          .whereType<Map>()
+          .map((record) => Map<String, dynamic>.from(record))
+          .toList();
+    } on SocketException {
+      throw Exception('Cannot connect to server. Make sure the API is running at $baseUrl');
+    } on http.ClientException {
+      throw Exception('Network error while fetching history.');
+    } catch (e) {
+      throw Exception('History fetch failed: $e');
+    }
+  }
+
+  /// Clear all RPE history records on backend
+  static Future<int> clearHistory() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/history'),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to clear history (status ${response.statusCode})');
+      }
+
+      final data = json.decode(response.body);
+      return (data['removed_count'] as num?)?.toInt() ?? 0;
+    } on SocketException {
+      throw Exception('Cannot connect to server. Make sure the API is running at $baseUrl');
+    } on http.ClientException {
+      throw Exception('Network error while clearing history.');
+    } catch (e) {
+      throw Exception('Clear history failed: $e');
+    }
+  }
   
   /// Get user-friendly lift type name
   static String getLiftTypeName(String liftType) {

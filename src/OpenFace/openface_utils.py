@@ -150,9 +150,40 @@ def run_openface(video_path, force_rerun=False, high_quality=True, use_pose_guid
             # Move the .avi file to visualized directory
             import shutil
             shutil.move(tracked_video_src, tracked_video_dest)
-            
             print(f"  → Landmark visualization saved: {tracked_video_name}")
             print(f"     Location: {tracked_video_dest}")
+
+            # --- Convert .avi to .mp4 and delete .avi to save space ---
+            mp4_name = tracked_video_name.replace('.avi', '.mp4')
+            mp4_dest = os.path.join(visualized_dir, mp4_name)
+            try:
+                # Only convert if .mp4 does not exist or is older than .avi
+                convert_needed = (
+                    not os.path.exists(mp4_dest) or
+                    os.path.getmtime(mp4_dest) < os.path.getmtime(tracked_video_dest)
+                )
+                if convert_needed:
+                    print(f"Converting overlay to MP4: {mp4_name}")
+                    ffmpeg_cmd = [
+                        'ffmpeg', '-y', '-i', tracked_video_dest,
+                        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+                        '-pix_fmt', 'yuv420p', mp4_dest
+                    ]
+                    result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+                    if result.returncode != 0:
+                        print(f"  ⚠ FFmpeg error: {result.stderr}")
+                    elif os.path.exists(mp4_dest):
+                        print(f"  ✓ MP4 overlay created: {mp4_name}")
+                        # Delete .avi to save space
+                        try:
+                            os.remove(tracked_video_dest)
+                            print(f"  Deleted .avi overlay to save space: {tracked_video_name}")
+                        except Exception as del_err:
+                            print(f"  ⚠ Could not delete .avi: {del_err}")
+                else:
+                    print(f"MP4 overlay already up-to-date: {mp4_name}")
+            except Exception as conv_err:
+                print(f"  ⚠ Overlay conversion failed: {conv_err}")
         else:
             print(f"  ⚠ Warning: Expected tracked video not found: {tracked_video_name}")
     

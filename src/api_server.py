@@ -12,9 +12,10 @@ API Endpoints:
     GET /health - Health check
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import os
 import sys
 import tempfile
@@ -23,6 +24,8 @@ from pathlib import Path
 from typing import Optional
 import json
 import numpy as np
+from datetime import datetime, timezone
+from threading import Lock
 
 # Add src directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -64,6 +67,66 @@ app.add_middleware(
 
 # Global predictor instance
 PREDICTOR = None
+HISTORY_LOCK = Lock()
+HISTORY_FILE = Path(__file__).parent.parent / "data" / "rpe_history.json"
+OUTPUT_ROOT = Path(__file__).parent.parent / "output"
+
+
+def ensure_history_file_exists() -> None:
+    """Create history file if missing."""
+    HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not HISTORY_FILE.exists():
+        HISTORY_FILE.write_text("[]", encoding="utf-8")
+
+
+def load_history() -> list:
+    """Load RPE history records from disk."""
+    ensure_history_file_exists()
+    with HISTORY_LOCK:
+        try:
+            content = HISTORY_FILE.read_text(encoding="utf-8")
+            records = json.loads(content)
+            return records if isinstance(records, list) else []
+        except json.JSONDecodeError:
+            return []
+
+
+def append_history_record(record: dict) -> None:
+    """Append a single RPE record to history file."""
+    ensure_history_file_exists()
+    with HISTORY_LOCK:
+        try:
+            current = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            if not isinstance(current, list):
+                current = []
+        except json.JSONDecodeError:
+            current = []
+
+        current.append(record)
+        HISTORY_FILE.write_text(json.dumps(current, indent=2), encoding="utf-8")
+
+
+def clear_history_records() -> int:
+    """Clear all history records and return number removed."""
+    ensure_history_file_exists()
+    with HISTORY_LOCK:
+        try:
+            current = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            removed_count = len(current) if isinstance(current, list) else 0
+        except json.JSONDecodeError:
+            removed_count = 0
+
+        HISTORY_FILE.write_text("[]", encoding="utf-8")
+        return removed_count
+
+
+def resolve_openface_overlay_relative_path(video_name: str) -> Optional[str]:
+    """Resolve generated OpenFace overlay video path relative to output root."""
+    base_name = Path(video_name).stem
+    candidate = OUTPUT_ROOT / "openface" / "visualized" / f"{base_name}_pose_guided.mp4"
+    if candidate.exists():
+        return str(candidate.relative_to(OUTPUT_ROOT)).replace("\\", "/")
+    return None
 
 @app.on_event("startup")
 async def load_models():
@@ -73,6 +136,7 @@ async def load_models():
     model_dir = Path(__file__).parent / "Train_Outputs"
     
     try:
+        ensure_history_file_exists()
         PREDICTOR = RPEPredictor(model_path=model_dir, verbose=True)
         
         # Check if ensemble models are loaded
@@ -86,6 +150,41 @@ async def load_models():
     except Exception as e:
         print(f"Warning: Could not load models: {e}")
         print("   Server will start but predictions will fail until models are trained")
+
+
+    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    app.mount("/output", StaticFiles(directory=str(OUTPUT_ROOT)), name="output")
+
+
+@app.get("/history")
+async def get_history(limit: Optional[int] = 50):
+    """Get recent prediction history (newest first)."""
+    max_limit = 500
+    safe_limit = min(max(limit or 50, 1), max_limit)
+
+    records = load_history()
+    records_sorted = sorted(
+        records,
+        key=lambda item: item.get("timestamp", ""),
+        reverse=True
+    )
+
+    return JSONResponse(content=convert_to_json_serializable({
+        "success": True,
+        "count": len(records_sorted[:safe_limit]),
+        "records": records_sorted[:safe_limit]
+    }))
+
+
+@app.delete("/history")
+async def clear_history():
+    """Clear all prediction history records."""
+    removed_count = clear_history_records()
+    return JSONResponse(content={
+        "success": True,
+        "cleared": True,
+        "removed_count": removed_count
+    })
 
 
 @app.get("/")
@@ -133,6 +232,7 @@ async def health_check():
 
 @app.post("/predict")
 async def predict_rpe(
+    request: Request,
     video: UploadFile = File(...),
     lift_type: str = Form(...)
 ):
@@ -199,9 +299,18 @@ async def predict_rpe(
             video_path,
             movement=lift_type,
             output_dir=temp_dir,
-            save_visualizations=False  # Enable visualization outputs for all 3 extractors
+            save_visualizations=True
         )
-        
+
+        import urllib.parse
+        openface_overlay_relative = resolve_openface_overlay_relative_path(video.filename)
+        openface_overlay_url = None
+        if openface_overlay_relative:
+            # URL-encode the path portion (not the whole URL)
+            encoded_path = urllib.parse.quote(openface_overlay_relative)
+            openface_overlay_url = str(request.base_url).rstrip("/") + f"/output/{encoded_path}"
+        print(f"[DEBUG] OpenFace overlay URL: {openface_overlay_url}")
+
         # Format response for API
         response = {
             "success": result['success'],
@@ -209,6 +318,7 @@ async def predict_rpe(
             "confidence": result['confidence'],
             "lift_type": result['movement'],
             "video_name": result['video_name'],
+            "openface_overlay_url": openface_overlay_url,
             "warnings": result['warnings'],
             "features": {
                 "bar_speed": result['features'].get('bar_speed'),
@@ -220,8 +330,18 @@ async def predict_rpe(
                 "detection_rate": result['features']['combined'].get('detection_rate', 0)
             }
         }
-        
+
         print(f"\nPrediction complete: RPE {response['predicted_rpe']}")
+
+        history_record = {
+            "id": f"{datetime.now(timezone.utc).timestamp()}_{video.filename}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "lift_type": response["lift_type"],
+            "predicted_rpe": response["predicted_rpe"],
+            "confidence": response["confidence"],
+            "video_name": response["video_name"]
+        }
+        append_history_record(convert_to_json_serializable(history_record))
         
         # Convert numpy types to JSON-serializable types
         response = convert_to_json_serializable(response)

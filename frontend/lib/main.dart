@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import 'services/rpe_api_service.dart';
 
 void main() {
@@ -496,60 +497,217 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
 // ==========================================
 // 5. HISTORY TAB
 // ==========================================
-class HistoryTab extends StatelessWidget {
+class HistoryTab extends StatefulWidget {
   const HistoryTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final pastLifts = [
-      {'lift': 'Squat', 'rpe': '8.5', 'date': 'Today', 'icon': Icons.fitness_center_rounded},
-      {'lift': 'Bench Press', 'rpe': '7.0', 'date': 'Yesterday', 'icon': Icons.horizontal_rule_rounded},
-      {'lift': 'Deadlift', 'rpe': '9.0', 'date': 'Oct 24, 2025', 'icon': Icons.arrow_upward_rounded},
-    ];
+  State<HistoryTab> createState() => _HistoryTabState();
+}
 
+class _HistoryTabState extends State<HistoryTab> {
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _pastLifts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final records = await RPEApiService.fetchHistory(limit: 100);
+      if (!mounted) return;
+
+      setState(() {
+        _pastLifts = records;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  IconData _iconForLift(String liftType) {
+    switch (liftType.toLowerCase()) {
+      case 'squat':
+        return Icons.fitness_center_rounded;
+      case 'bench press':
+        return Icons.horizontal_rule_rounded;
+      case 'deadlift':
+        return Icons.arrow_upward_rounded;
+      default:
+        return Icons.sports_gymnastics_rounded;
+    }
+  }
+
+  String _formatDate(String? isoTimestamp) {
+    if (isoTimestamp == null || isoTimestamp.isEmpty) {
+      return 'Unknown date';
+    }
+
+    final date = DateTime.tryParse(isoTimestamp)?.toLocal();
+    if (date == null) return 'Unknown date';
+
+    final now = DateTime.now();
+    final days = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(date.year, date.month, date.day))
+        .inDays;
+
+    if (days == 0) return 'Today';
+    if (days == 1) return 'Yesterday';
+
+    const monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${monthNames[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Future<void> _confirmAndClearHistory() async {
+    if (_loading) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear History'),
+        content: const Text('Remove all saved RPE history entries? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      await RPEApiService.clearHistory();
+      if (!mounted) return;
+      await _loadHistory();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Recent Sessions', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Recent Sessions', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+              TextButton.icon(
+                onPressed: _pastLifts.isEmpty || _loading ? null : _confirmAndClearHistory,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('Clear'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade400,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           Expanded(
-            child: ListView.builder(
-              itemCount: pastLifts.length,
-              itemBuilder: (context, index) {
-                final lift = pastLifts[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    leading: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: const Color(0xFF1E88E5).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(lift['icon'] as IconData, color: const Color(0xFF1E88E5)),
-                    ),
-                    title: Text(lift['lift'] as String, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(lift['date'] as String, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text('RPE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 0.5)),
-                        Text(lift['rpe'] as String, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E88E5)))
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Failed to load history', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.grey.shade700)),
+                            const SizedBox(height: 8),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(onPressed: _loadHistory, child: const Text('Retry')),
+                          ],
+                        ),
+                      )
+                    : _pastLifts.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No lifts yet. Upload a video to start your history.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            color: const Color(0xFF1E88E5),
+                            onRefresh: _loadHistory,
+                            child: ListView.builder(
+                              itemCount: _pastLifts.length,
+                              itemBuilder: (context, index) {
+                                final lift = _pastLifts[index];
+                                final liftType = (lift['lift_type'] ?? 'Unknown').toString();
+                                final rpe = lift['predicted_rpe']?.toString() ?? 'N/A';
+                                final date = _formatDate(lift['timestamp']?.toString());
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.all(16),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(color: const Color(0xFF1E88E5).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                                      child: Icon(_iconForLift(liftType), color: const Color(0xFF1E88E5)),
+                                    ),
+                                    title: Text(liftType, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                                    subtitle: Padding(
+                                      padding: const EdgeInsets.only(top: 4.0),
+                                      child: Text(date, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                                    ),
+                                    trailing: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        const Text('RPE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 0.5)),
+                                        Text(rpe, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -610,13 +768,285 @@ class ProfileTab extends StatelessWidget {
 // ==========================================
 // 7. LIFTING INSIGHTS
 // ==========================================
+class OverlayVideoPanel extends StatefulWidget {
+  final String? videoUrl;
+  const OverlayVideoPanel({super.key, required this.videoUrl});
+
+  @override
+  State<OverlayVideoPanel> createState() => _OverlayVideoPanelState();
+}
+
+class _OverlayVideoPanelState extends State<OverlayVideoPanel> {
+  VideoPlayerController? _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  @override
+  void didUpdateWidget(covariant OverlayVideoPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl) {
+      _disposeController();
+      _initializeVideo();
+    }
+  }
+
+  Future<void> _initializeVideo() async {
+    final url = widget.videoUrl;
+    if (url == null || url.isEmpty) {
+      setState(() {
+        _error = null;
+      });
+      return;
+    }
+
+    try {
+      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(0);
+      await controller.play();
+
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _controller = controller;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Overlay URL was returned, but the video could not be played.';
+      });
+    }
+  }
+
+  void _disposeController() {
+    _controller?.dispose();
+    _controller = null;
+  }
+
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_controller != null && _controller!.value.isInitialized) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _controller!.value.size.width,
+                height: _controller!.value.size.height,
+                child: VideoPlayer(_controller!),
+              ),
+            ),
+            Positioned(
+              bottom: 14,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'OpenFace Overlay',
+                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        const Icon(Icons.play_circle_fill_rounded, color: Colors.white54, size: 70),
+        Positioned(
+          bottom: 16,
+          left: 20,
+          right: 20,
+          child: Text(
+            _error ??
+                (widget.videoUrl == null || widget.videoUrl!.isEmpty
+                    ? 'No OpenFace overlay URL was returned by the backend for this lift.'
+                    : 'Loading OpenFace overlay...'),
+            style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class InsightsScreen extends StatelessWidget {
   final String liftName;
   final Map<String, dynamic>? predictionData;
   const InsightsScreen({super.key, required this.liftName, this.predictionData});
 
+  double? _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  String _formatInt(dynamic value, {String fallback = 'N/A'}) {
+    if (value is num) return value.toInt().toString();
+    if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed != null) return parsed.toString();
+    }
+    return fallback;
+  }
+
+  String _formatNumber(dynamic value, {int decimals = 2, String fallback = 'N/A'}) {
+    final numeric = _toDouble(value);
+    if (numeric == null) return fallback;
+    return numeric.toStringAsFixed(decimals);
+  }
+
+  String _formatSeconds(dynamic value, {int decimals = 2, String fallback = 'N/A'}) {
+    final numeric = _toDouble(value);
+    if (numeric == null) return fallback;
+    return '${numeric.toStringAsFixed(decimals)}s';
+  }
+
+  String _formatPercent(dynamic value, {int decimals = 1, String fallback = 'N/A'}) {
+    final numeric = _toDouble(value);
+    if (numeric == null) return fallback;
+    return '${(numeric * 100).toStringAsFixed(decimals)}%';
+  }
+
+  List<String> _topAUSummary(Map<String, dynamic>? facial, {int count = 3}) {
+    if (facial == null) return [];
+
+    final candidates = <MapEntry<String, double>>[];
+    facial.forEach((key, value) {
+      final parsed = _toDouble(value);
+      final isAuMax = key.contains('AU') && (key.endsWith('_max') || key.endsWith('_r_max'));
+      if (parsed != null && isAuMax) {
+        candidates.add(MapEntry(key, parsed));
+      }
+    });
+
+    candidates.sort((a, b) => b.value.compareTo(a.value));
+    final top = candidates.take(count);
+
+    return top.map((entry) {
+      final auLabel = entry.key.split('_').first;
+      return '$auLabel ${entry.value.toStringAsFixed(2)}';
+    }).toList();
+  }
+
+  Map<String, dynamic> _barStatus(dynamic repCount, dynamic fatigueSeconds) {
+    final reps = _toDouble(repCount);
+    final fatigue = _toDouble(fatigueSeconds);
+
+    if (reps == null || reps <= 0) {
+      return {'label': 'Unavailable', 'color': Colors.grey};
+    }
+
+    if (fatigue == null) {
+      return {'label': 'Detected', 'color': Colors.green};
+    }
+
+    if (fatigue <= 0.20) {
+      return {'label': 'Stable Tempo', 'color': Colors.green};
+    }
+    if (fatigue <= 0.45) {
+      return {'label': 'Mild Fatigue', 'color': Colors.orange};
+    }
+    return {'label': 'High Fatigue', 'color': Colors.red};
+  }
+
+  Map<String, dynamic> _postureStatus(dynamic dValue) {
+    final postureMetric = _toDouble(dValue);
+    if (postureMetric == null) {
+      return {'label': 'Unavailable', 'color': Colors.grey};
+    }
+
+    if (postureMetric < 0.80) {
+      return {'label': 'Stable Form', 'color': Colors.green};
+    }
+    if (postureMetric < 1.40) {
+      return {'label': 'Form Drift', 'color': Colors.orange};
+    }
+    return {'label': 'High Deviation', 'color': Colors.red};
+  }
+
+  Map<String, dynamic> _facialStatus(dynamic detectionRate, dynamic confidenceMean) {
+    final detection = _toDouble(detectionRate);
+    final confidence = _toDouble(confidenceMean);
+
+    if (detection == null && confidence == null) {
+      return {'label': 'No Face Data', 'color': Colors.grey, 'message': 'OpenFace could not extract enough valid frames.'};
+    }
+
+    final detectionValue = detection ?? 0;
+    final confidenceValue = confidence ?? 0;
+
+    if (detectionValue >= 0.75 && confidenceValue >= 0.70) {
+      return {
+        'label': 'Strong Face Tracking',
+        'color': Colors.green,
+        'message': 'Facial strain metrics are based on consistent face detection.'
+      };
+    }
+    if (detectionValue >= 0.50 && confidenceValue >= 0.50) {
+      return {
+        'label': 'Partial Face Tracking',
+        'color': Colors.orange,
+        'message': 'Facial metrics are usable, but some frames had missed or weaker face detection.'
+      };
+    }
+    return {
+      'label': 'Weak Face Tracking',
+      'color': Colors.red,
+      'message': 'Facial outputs may be noisy because the face was not tracked reliably.'
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    final barSpeed = predictionData?['features']?['bar_speed'] as Map<String, dynamic>?;
+    final posture = predictionData?['features']?['posture'] as Map<String, dynamic>?;
+    final facial = predictionData?['features']?['facial'] as Map<String, dynamic>?;
+
+    final barRepCount = barSpeed?['rep_count'];
+    final barFirstRep = barSpeed?['first_rep_duration_s'];
+    final barLastRep = barSpeed?['last_rep_duration_s'];
+    final barFatigue = barSpeed?['fatigue_s'];
+
+    final postureDValue = posture?['d_value'];
+    final postureRepCount = posture?['rep_count'];
+
+    final facialDetection = facial?['detection_rate'];
+    final facialConfidence = facial?['confidence_mean'];
+    final topAUs = _topAUSummary(facial);
+    final openfaceOverlayUrl = predictionData?['openface_overlay_url']?.toString();
+
+    final barStatus = _barStatus(barRepCount, barFatigue);
+    final postureStatus = _postureStatus(postureDValue);
+    final facialStatus = _facialStatus(facialDetection, facialConfidence);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(title: Text('$liftName Breakdown')),
@@ -633,12 +1063,8 @@ class InsightsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
               ),
-              child: const Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(Icons.play_circle_fill_rounded, color: Colors.white54, size: 70),
-                  Positioned(bottom: 16, left: 20, child: Text('Bounding Boxes & Keypoints Rendered', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600))),
-                ],
+              child: OverlayVideoPanel(
+                videoUrl: openfaceOverlayUrl,
               ),
             ),
             const SizedBox(height: 40),
@@ -649,26 +1075,40 @@ class InsightsScreen extends StatelessWidget {
             _buildMetricCard(
               icon: Icons.speed_rounded, 
               title: 'Bar Speed', 
-              value: predictionData?['features']?['bar_speed']?['rep_count']?.toString() ?? 'N/A',
+              value: _formatInt(barRepCount),
               valueLabel: 'reps',
-              status: 'Detected', 
-              statusColor: Colors.green
+              status: barStatus['label'], 
+              statusColor: barStatus['color'],
+              details: [
+                'First rep duration: ${_formatSeconds(barFirstRep)}',
+                'Last rep duration: ${_formatSeconds(barLastRep)}',
+                'Fatigue delta: ${_formatSeconds(barFatigue)}',
+              ],
             ),
             _buildMetricCard(
               icon: Icons.accessibility_new_rounded, 
               title: 'Pose Estimation (MMPose)', 
-              value: predictionData?['features']?['posture']?['d_value']?.toStringAsFixed(2) ?? 'N/A',
+              value: _formatNumber(postureDValue),
               valueLabel: 'D-metric',
-              status: predictionData?['features']?['posture'] != null ? 'Analyzed' : 'Unavailable', 
-              statusColor: predictionData?['features']?['posture'] != null ? Colors.green : Colors.grey
+              status: postureStatus['label'], 
+              statusColor: postureStatus['color'],
+              details: [
+                'Reps used for posture metric: ${_formatInt(postureRepCount)}',
+                'Higher D-metric generally means more form deviation.',
+              ],
             ),
             _buildMetricCard(
               icon: Icons.face_rounded, 
               title: 'Facial Strain (OpenFace)', 
-              value: (predictionData?['features']?['facial']?['detection_rate'] ?? 0).toStringAsFixed(1),
+              value: _formatPercent(facialDetection),
               valueLabel: '% detected',
-              status: 'Analyzed', 
-              statusColor: Colors.green
+              status: facialStatus['label'], 
+              statusColor: facialStatus['color'],
+              details: [
+                'Face-tracking confidence: ${_formatPercent(facialConfidence)}',
+                facialStatus['message'],
+                'Top AU peaks: ${topAUs.isEmpty ? 'N/A' : topAUs.join(' • ')}',
+              ],
             ),
           ],
         ),
@@ -676,7 +1116,7 @@ class InsightsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMetricCard({required IconData icon, required String title, required String value, String? valueLabel, required String status, required Color statusColor}) {
+  Widget _buildMetricCard({required IconData icon, required String title, required String value, String? valueLabel, required String status, required Color statusColor, List<String> details = const []}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -709,6 +1149,18 @@ class InsightsScreen extends StatelessWidget {
                       ],
                     ],
                   ),
+                  if (details.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...details.map(
+                      (line) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          line,
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
