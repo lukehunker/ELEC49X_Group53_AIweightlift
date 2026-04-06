@@ -94,11 +94,22 @@ def extract_bar_speed(video_path, movement=None, output_dir=None):
             vis_filename = f"{movement}__{video_basename}__wrist_vis.mp4"
             vis_src = os.path.join(output_dir, vis_filename)
             vis_dest = vis_output_dir / vis_filename
-            
+
             if os.path.exists(vis_src):
-                shutil.move(vis_src, vis_dest)
+                try:
+                    shutil.move(vis_src, vis_dest)
+                    print(f"[BAR SPEED] Visualization moved to: {vis_dest}")
+                except Exception as move_exc:
+                    print(f"[BAR SPEED] Move failed: {move_exc}. Trying to copy...")
+                    try:
+                        shutil.copy2(vis_src, vis_dest)
+                        print(f"[BAR SPEED] Visualization copied to: {vis_dest}")
+                    except Exception as copy_exc:
+                        print(f"[BAR SPEED] Copy also failed: {copy_exc}")
                 features['visualization_path'] = str(vis_dest)
-        
+            else:
+                print(f"[BAR SPEED] Visualization not found at: {vis_src}")
+
         return features
     except Exception as e:
         print(f"Error extracting bar speed features: {e}")

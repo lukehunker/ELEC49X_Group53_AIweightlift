@@ -33,6 +33,8 @@ class RPEApiService {
   static Future<Map<String, dynamic>> predictRPE({
     required String videoPath,
     required String liftType,
+    double? startTime,
+    double? endTime,
   }) async {
     try {
       // Map lift type to backend format
@@ -66,6 +68,12 @@ class RPEApiService {
       
       // Add lift type as form field
       request.fields['lift_type'] = backendLiftType;
+      if (startTime != null) {
+        request.fields['start_time'] = startTime.toString();
+      }
+      if (endTime != null) {
+        request.fields['end_time'] = endTime.toString();
+      }
       
       print('Sending request to $baseUrl/predict');
       print('Lift type: $backendLiftType');

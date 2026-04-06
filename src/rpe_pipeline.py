@@ -31,6 +31,32 @@ import json
 from pathlib import Path
 from typing import Dict, Optional, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import subprocess
+import shutil
+
+def ensure_mp4(input_path):
+    """
+    If input_path is not .mp4, convert to .mp4 using ffmpeg and return new path.
+    If already .mp4, return input_path.
+    """
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext == '.mp4':
+        return input_path
+    mp4_path = os.path.splitext(input_path)[0] + '_converted.mp4'
+    if not os.path.exists(mp4_path):
+        print(f"[INFO] Converting {input_path} to MP4: {mp4_path}")
+        cmd = [
+            'ffmpeg', '-y', '-i', input_path,
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+            '-c:a', 'aac', '-movflags', '+faststart',
+            mp4_path
+        ]
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            print(f"[ERROR] ffmpeg conversion failed: {e}")
+            raise
+    return mp4_path
 
 # Add src directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -73,6 +99,8 @@ class RPEPredictor:
         
         self.model_dir = model_dir
         
+        # Use versioned model files
+        self.model_version = "20260316_134709"
         if self.model_dir.exists():
             self._load_models()
         elif self.verbose:
@@ -82,16 +110,14 @@ class RPEPredictor:
     def _load_models(self):
         """Load the trained ensemble models (LGBM + XGBoost) and metadata."""
         try:
+            version = self.model_version
             # Load metadata first to get feature names
-            metadata_path = self.model_dir / "ensemble_metadata.json"
+            metadata_path = self.model_dir / f"ensemble_metadata_{version}.json"
             if metadata_path.exists():
                 with open(metadata_path, 'r') as f:
                     self.metadata = json.load(f)
-                
                 self.feature_names = self.metadata.get('feature_columns', [])
-                self.ensemble_weights = self.metadata.get('ensemble_weights', 
-                                                          {'lgbm': 0.6, 'xgb': 0.4})
-                
+                self.ensemble_weights = self.metadata.get('ensemble_weights', {'lgbm': 0.6, 'xgb': 0.4})
                 if self.verbose:
                     cv_perf = self.metadata.get('cv_performance', {})
                     print(f"Ensemble Configuration:")
@@ -100,18 +126,16 @@ class RPEPredictor:
                     if cv_perf:
                         print(f"   CV MAE: {cv_perf.get('ensemble_mae', 0):.4f}")
                         print(f"   CV R²: {cv_perf.get('ensemble_r2', 0):.4f}")
-            
             # Load LightGBM model
-            lgbm_path = self.model_dir / "lgbm_ensemble_model.txt"
+            lgbm_path = self.model_dir / f"lgbm_ensemble_model_{version}.txt"
             if lgbm_path.exists():
                 self.lgbm_model = lgb.Booster(model_file=str(lgbm_path))
                 if self.verbose:
                     print(f"Loaded LightGBM: {lgbm_path.name}")
             else:
                 print(f"LightGBM model not found: {lgbm_path}")
-            
             # Load XGBoost model
-            xgb_path = self.model_dir / "xgb_ensemble_model.json"
+            xgb_path = self.model_dir / f"xgb_ensemble_model_{version}.json"
             if xgb_path.exists():
                 self.xgb_model = xgb.XGBRegressor()
                 self.xgb_model.load_model(str(xgb_path))
@@ -119,19 +143,16 @@ class RPEPredictor:
                     print(f"Loaded XGBoost: {xgb_path.name}")
             else:
                 print(f"XGBoost model not found: {xgb_path}")
-            
             # Load scaler
-            scaler_path = self.model_dir / "ensemble_scaler.pkl"
+            scaler_path = self.model_dir / f"ensemble_scaler_{version}.pkl"
             if scaler_path.exists():
                 self.scaler = joblib.load(scaler_path)
                 if self.verbose:
                     print(f"Loaded scaler: {scaler_path.name}")
             else:
                 print(f"Scaler not found: {scaler_path}")
-            
             if self.verbose and self.feature_names:
                 print(f"   Expected features: {len(self.feature_names)}")
-        
         except Exception as e:
             if self.verbose:
                 print(f"Error loading models: {e}")
@@ -154,7 +175,7 @@ class RPEPredictor:
             
             if bar_features:
                 if self.verbose:
-                    print(f"  ✓ {bar_features['rep_count']} reps, fatigue: {bar_features['fatigue_s']:.2f}s")
+                    print(f"  ✓ {bar_features['rep_count']} reps, rep_change_s: {bar_features['rep_change_s']:.2f}s")
             else:
                 result['warnings'].append("Bar speed extraction returned None")
         
@@ -385,8 +406,8 @@ class RPEPredictor:
         
         # Bar speed features (use rep_change_s as the speed metric)
         if bar_speed:
-            fatigue_s = bar_speed.get('fatigue_s', 0)
-            combined['rep_change_s'] = fatigue_s  # Map to expected name
+            rep_change_s = bar_speed.get('rep_change_s', 0)
+            combined['rep_change_s'] = rep_change_s  # Map to expected name
             combined['rep_count'] = bar_speed.get('rep_count', 0)
         else:
             combined['rep_change_s'] = 0
@@ -536,7 +557,10 @@ class RPEPredictor:
         """
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video not found: {video_path}")
-        
+
+        # Ensure input is .mp4 (convert if needed)
+        video_path = ensure_mp4(video_path)
+
         if self.lgbm_model is None or self.xgb_model is None:
             raise RuntimeError(
                 "Ensemble models not loaded. Train models first using LGBMMod2_Ensemble.py"
@@ -678,7 +702,7 @@ def predict_rpe(video_path: str, movement: Optional[str] = None,
     Args:
         video_path: Path to video file
         movement: Movement type ('Squat', 'Bench Press', 'Deadlift') or None for auto-detect
-        model_path: Path to trained model (uses default if None)
+        model_path: Path to trained model file (optional)
         verbose: Print progress messages
         save_visualizations: Whether to save visualization outputs (default: False)
     

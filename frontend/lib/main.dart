@@ -239,46 +239,142 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
 
   Future<void> _pickAndUploadVideo() async {
     try {
-      // Reset error
       setState(() {
         _errorMessage = null;
       });
-      
+
       // Pick video from gallery
       final XFile? videoFile = await _picker.pickVideo(
         source: ImageSource.gallery,
         maxDuration: const Duration(minutes: 5),
       );
-      
+
       if (videoFile == null) {
         // User cancelled
         return;
       }
-      
-      // Show processing state
+
+
+      // Prompt for start and end time, with 'Use entire video' checkbox
+      final times = await showDialog<Map<String, double>?>(
+        context: context,
+        builder: (context) {
+          final startController = TextEditingController();
+          final endController = TextEditingController();
+          bool useEntireVideo = true;
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: const Text('Crop Video'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CheckboxListTile(
+                      value: useEntireVideo,
+                      onChanged: (val) {
+                        setState(() => useEntireVideo = val ?? true);
+                      },
+                      title: const Text('Use entire video'),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                    TextField(
+                      controller: startController,
+                      enabled: !useEntireVideo,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Start Time (seconds)',
+                      ),
+                    ),
+                    TextField(
+                      controller: endController,
+                      enabled: !useEntireVideo,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'End Time (seconds)',
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      if (useEntireVideo) {
+                        Navigator.pop(context, null);
+                      } else {
+                        final start = double.tryParse(startController.text);
+                        final end = double.tryParse(endController.text);
+                        if (start != null && end != null && end > start) {
+                          Navigator.pop(context, {'start': start, 'end': end});
+                        }
+                      }
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (times == null) {
+        // User selected 'use entire video' or cancelled
+        setState(() => _currentState = AppState.processing);
+        try {
+          final result = await RPEApiService.predictRPE(
+            videoPath: videoFile.path,
+            liftType: _selectedLift,
+          );
+          setState(() {
+            _predictionData = result;
+            _currentState = AppState.result;
+          });
+        } catch (e) {
+          setState(() {
+            _errorMessage = e.toString();
+            _currentState = AppState.idle;
+          });
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Prediction Failed'),
+                content: Text(_errorMessage ?? 'Unknown error'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        return;
+      }
+
       setState(() => _currentState = AppState.processing);
-      
-      // Call API
+
       try {
         final result = await RPEApiService.predictRPE(
           videoPath: videoFile.path,
           liftType: _selectedLift,
+          startTime: times['start'],
+          endTime: times['end'],
         );
-        
-        // Success - show results
         setState(() {
           _predictionData = result;
           _currentState = AppState.result;
         });
-        
       } catch (e) {
-        // API error
         setState(() {
           _errorMessage = e.toString();
           _currentState = AppState.idle;
         });
-        
-        // Show error dialog
         if (mounted) {
           showDialog(
             context: context,
@@ -295,7 +391,6 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
           );
         }
       }
-      
     } catch (e) {
       print('Error picking video: $e');
       setState(() {
@@ -430,7 +525,6 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
   Widget _buildResultView({Key? key}) {
     // Extract data from API response
     final rpe = _predictionData?['predicted_rpe']?.toString() ?? '0.0';
-    final confidence = (_predictionData?['confidence'] ?? 0.0) * 100;
     final repCount = _predictionData?['features']?['bar_speed']?['rep_count'] ?? 0;
     
     return Center(
@@ -463,7 +557,6 @@ class _AnalyzerTabState extends State<AnalyzerTab> {
                 const SizedBox(height: 8),
                 Text(rpe, style: const TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Color(0xFF1E88E5), letterSpacing: -3, height: 1)),
                 const SizedBox(height: 12),
-                Text('${confidence.toStringAsFixed(0)}% confidence', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
               ],
             ),
           ),

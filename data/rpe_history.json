@@ -1,106 +1,434 @@
 [
   {
-    "id": "1773601425.708625_Squat 7.mp4",
-    "timestamp": "2026-03-15T19:03:45.708643+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 6.5,
-    "confidence": 0.61,
-    "video_name": "Squat 7.mp4"
-  },
-  {
-    "id": "1773602078.38501_Squat 5.mp4",
-    "timestamp": "2026-03-15T19:14:38.385027+00:00",
+    "id": "1773608893.872224_Squat 5.mp4",
+    "timestamp": "2026-03-15T21:08:13.872297+00:00",
     "lift_type": "Squat",
     "predicted_rpe": 6.0,
     "confidence": 0.34,
     "video_name": "Squat 5.mp4"
   },
   {
-    "id": "1773602184.541685_Squat 196.mp4",
-    "timestamp": "2026-03-15T19:16:24.541706+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 6.5,
-    "confidence": 0.18,
-    "video_name": "Squat 196.mp4"
-  },
-  {
-    "id": "1773602430.653199_Squat 158.mp4",
-    "timestamp": "2026-03-15T19:20:30.653217+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 6.5,
-    "confidence": 0.34,
-    "video_name": "Squat 158.mp4"
-  },
-  {
-    "id": "1773602513.232946_Squat 7.mp4",
-    "timestamp": "2026-03-15T19:21:53.232962+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 6.5,
-    "confidence": 0.61,
-    "video_name": "Squat 7.mp4"
-  },
-  {
-    "id": "1773602863.26105_Squat 201.mp4",
-    "timestamp": "2026-03-15T19:27:43.261063+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 6.5,
-    "confidence": 0.35,
-    "video_name": "Squat 201.mp4"
-  },
-  {
-    "id": "1773603245.849525_Squat 317.mp4",
-    "timestamp": "2026-03-15T19:34:05.849540+00:00",
+    "id": "1773626224.923377_Squat 1.mp4",
+    "timestamp": "2026-03-16T01:57:04.923422+00:00",
     "lift_type": "Squat",
     "predicted_rpe": 6.0,
     "confidence": 0.34,
-    "video_name": "Squat 317.mp4"
+    "video_name": "cropped_Squat 1.mp4"
   },
   {
-    "id": "1773603931.2606_Squat 313.mp4",
-    "timestamp": "2026-03-15T19:45:31.260633+00:00",
+    "id": "1773626667.521125_Squat 148.mp4",
+    "timestamp": "2026-03-16T02:04:27.521171+00:00",
     "lift_type": "Squat",
-    "predicted_rpe": 6.5,
-    "confidence": 0.34,
-    "video_name": "Squat 313.mp4"
-  },
-  {
-    "id": "1773604122.106505_Squat 179.mp4",
-    "timestamp": "2026-03-15T19:48:42.106525+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 7.0,
-    "confidence": 0.2,
-    "video_name": "Squat 179.mp4"
-  },
-  {
-    "id": "1773604422.993991_Squat 107.mp4",
-    "timestamp": "2026-03-15T19:53:42.994008+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 7.5,
-    "confidence": 0.83,
-    "video_name": "Squat 107.mp4"
-  },
-  {
-    "id": "1773604664.673576_Squat 157.mp4",
-    "timestamp": "2026-03-15T19:57:44.673591+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 7.0,
-    "confidence": 0.34,
-    "video_name": "Squat 157.mp4"
-  },
-  {
-    "id": "1773604969.542312_Squat 44.mp4",
-    "timestamp": "2026-03-15T20:02:49.542334+00:00",
-    "lift_type": "Squat",
-    "predicted_rpe": 6.5,
+    "predicted_rpe": 6.0,
     "confidence": 0.96,
-    "video_name": "Squat 44.mp4"
+    "video_name": "cropped_Squat 148.mp4"
   },
   {
-    "id": "1773606889.454879_Squat 67.mp4",
-    "timestamp": "2026-03-15T20:34:49.454924+00:00",
+    "id": "1773626958.27997_Squat 148.mp4",
+    "timestamp": "2026-03-16T02:09:18.279986+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 6.0,
+    "confidence": 0.94,
+    "video_name": "Squat 148.mp4"
+  },
+  {
+    "id": "1773627265.379389_Squat 148.mp4",
+    "timestamp": "2026-03-16T02:14:25.379403+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 6.0,
+    "confidence": 0.94,
+    "video_name": "Squat 148.mp4"
+  },
+  {
+    "id": "1773627562.761741_Squat 148.mp4",
+    "timestamp": "2026-03-16T02:19:22.761761+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 6.0,
+    "confidence": 0.94,
+    "video_name": "Squat 148.mp4"
+  },
+  {
+    "id": "1773627754.96195_Squat 148.mp4",
+    "timestamp": "2026-03-16T02:22:34.962034+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 6.0,
+    "confidence": 0.94,
+    "video_name": "Squat 148.mp4"
+  },
+  {
+    "id": "1773628028.419829_Squat 148.mp4",
+    "timestamp": "2026-03-16T02:27:08.419872+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 6.0,
+    "confidence": 0.94,
+    "video_name": "Squat 148.mp4"
+  },
+  {
+    "id": "1773628216.335855_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-16T02:30:16.335877+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.95,
+    "video_name": "cropped_3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773628726.96316_3x7 165kg deadlift - training diary #shorts.mp4",
+    "timestamp": "2026-03-16T02:38:46.963290+00:00",
+    "lift_type": "Deadlift",
+    "predicted_rpe": 7.0,
+    "confidence": 0.84,
+    "video_name": "cropped_3x7 165kg deadlift - training diary #shorts.mp4"
+  },
+  {
+    "id": "1773685178.029786_105kg Back Squat 3x8.mp4",
+    "timestamp": "2026-03-16T18:19:38.029917+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.5,
+    "confidence": 0.35,
+    "video_name": "105kg Back Squat 3x8.mp4"
+  },
+  {
+    "id": "1773685447.736224_3x7 Bench felt GOOD.mp4",
+    "timestamp": "2026-03-16T18:24:07.736287+00:00",
+    "lift_type": "Bench Press",
+    "predicted_rpe": 6.5,
+    "confidence": 0.4,
+    "video_name": "3x7 Bench felt GOOD.mp4"
+  },
+  {
+    "id": "1773685725.342517_Squat 318.mp4",
+    "timestamp": "2026-03-16T18:28:45.343086+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 4.0,
+    "confidence": 0.87,
+    "video_name": "Squat 318.mp4"
+  },
+  {
+    "id": "1773686299.429921_W5D3 deadlift 3x5@80% 530c.mp4",
+    "timestamp": "2026-03-16T18:38:19.429976+00:00",
+    "lift_type": "Deadlift",
+    "predicted_rpe": 6.5,
+    "confidence": 0.42,
+    "video_name": "W5D3 deadlift 3x5@80% 530c.mp4"
+  },
+  {
+    "id": "1773686345.883263_W5D3 deadlift 3x5@80% 530c.mp4",
+    "timestamp": "2026-03-16T18:39:05.883296+00:00",
+    "lift_type": "Deadlift",
+    "predicted_rpe": 7.0,
+    "confidence": 0.48,
+    "video_name": "cropped_W5D3 deadlift 3x5@80% 530c.mp4"
+  },
+  {
+    "id": "1773687030.947021_Demo.MOV",
+    "timestamp": "2026-03-16T18:50:30.947050+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.5,
+    "confidence": 0.35,
+    "video_name": "Demo.MOV"
+  },
+  {
+    "id": "1773687674.472862_Demo.mp4",
+    "timestamp": "2026-03-16T19:01:14.473165+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.5,
+    "confidence": 0.35,
+    "video_name": "Demo.mp4"
+  },
+  {
+    "id": "1773688081.968216_260lbs Squat 3x7 @160bw.mp4",
+    "timestamp": "2026-03-16T19:08:01.968364+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.34,
+    "video_name": "260lbs Squat 3x7 @160bw.mp4"
+  },
+  {
+    "id": "1773688513.915746_Squat 320.mp4",
+    "timestamp": "2026-03-16T19:15:13.915812+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 4.0,
+    "confidence": 0.86,
+    "video_name": "Squat 320.mp4"
+  },
+  {
+    "id": "1773688749.759641_Squat 325.mp4",
+    "timestamp": "2026-03-16T19:19:09.759707+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 4.0,
+    "confidence": 0.88,
+    "video_name": "Squat 325.mp4"
+  },
+  {
+    "id": "1773688899.184835_Squat 323.mp4",
+    "timestamp": "2026-03-16T19:21:39.184936+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 7.0,
+    "confidence": 0.92,
+    "video_name": "Squat 323.mp4"
+  },
+  {
+    "id": "1773689059.449746_IMG_8301.MOV",
+    "timestamp": "2026-03-16T19:24:19.449765+00:00",
     "lift_type": "Squat",
     "predicted_rpe": 7.5,
-    "confidence": 0.33,
-    "video_name": "Squat 67.mp4"
+    "confidence": 0.35,
+    "video_name": "IMG_8301.MOV"
+  },
+  {
+    "id": "1773689220.4553_IMG_8301.MOV",
+    "timestamp": "2026-03-16T19:27:00.455316+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 7.5,
+    "confidence": 0.35,
+    "video_name": "IMG_8301.MOV"
+  },
+  {
+    "id": "1773690225.533803_Demo_mp4.mp4",
+    "timestamp": "2026-03-16T19:43:45.533834+00:00",
+    "lift_type": "Deadlift",
+    "predicted_rpe": 5.0,
+    "confidence": 0.41,
+    "video_name": "Demo_mp4.mp4"
+  },
+  {
+    "id": "1773690514.82029_IMG_8301 (1).mp4",
+    "timestamp": "2026-03-16T19:48:34.820305+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 4.5,
+    "confidence": 0.53,
+    "video_name": "IMG_8301 (1).mp4"
+  },
+  {
+    "id": "1773690877.55797_IMG_8301.mp4",
+    "timestamp": "2026-03-16T19:54:37.558019+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 7.5,
+    "confidence": 0.35,
+    "video_name": "IMG_8301.mp4"
+  },
+  {
+    "id": "1773691352.178473_ajmal mov test.MOV",
+    "timestamp": "2026-03-16T20:02:32.179675+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 4.5,
+    "confidence": 0.51,
+    "video_name": "ajmal mov test_converted.mp4"
+  },
+  {
+    "id": "1773692464.218995_IMG_8302.MOV",
+    "timestamp": "2026-03-16T20:21:04.219014+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 4.5,
+    "confidence": 0.62,
+    "video_name": "IMG_8302_converted.mp4"
+  },
+  {
+    "id": "1773692578.156497_IMG_8303.MOV",
+    "timestamp": "2026-03-16T20:22:58.156561+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "IMG_8303_converted.mp4"
+  },
+  {
+    "id": "1773711832.479049_2x4 Squat.mp4",
+    "timestamp": "2026-03-17T01:43:52.479207+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.5,
+    "confidence": 0.68,
+    "video_name": "2x4 Squat.mp4"
+  },
+  {
+    "id": "1773711959.107774_Squats 2x3 - Trim2.mp4",
+    "timestamp": "2026-03-17T01:45:59.107830+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 7.0,
+    "confidence": 0.49,
+    "video_name": "Squats 2x3 - Trim2.mp4"
+  },
+  {
+    "id": "1773712126.496948_Squat 2x4 w_ 175kg.mp4",
+    "timestamp": "2026-03-17T01:48:46.496979+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 7.0,
+    "confidence": 0.96,
+    "video_name": "Squat 2x4 w_ 175kg.mp4"
+  },
+  {
+    "id": "1773712498.257247_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T01:54:58.257266+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773713010.319092_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T02:03:30.319107+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773762340.22036_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T15:45:40.220442+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773762725.314573_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T15:52:05.315170+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773763577.287357_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T16:06:17.287431+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773763953.859739_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T16:12:33.859815+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773764610.778499_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T16:23:30.778570+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773765111.829569_IMG_8306.mov",
+    "timestamp": "2026-03-17T16:31:51.829586+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.0,
+    "confidence": 0.88,
+    "video_name": "IMG_8306_converted.mp4"
+  },
+  {
+    "id": "1773766836.053748_Sere_vid.mov",
+    "timestamp": "2026-03-17T17:00:36.053765+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.0,
+    "confidence": 0.88,
+    "video_name": "Sere_vid_converted.mp4"
+  },
+  {
+    "id": "1773767198.602238_IMG_8307.mov",
+    "timestamp": "2026-03-17T17:06:38.602302+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.48,
+    "video_name": "IMG_8307_converted.mp4"
+  },
+  {
+    "id": "1773767690.652902_Sere_vid.mov",
+    "timestamp": "2026-03-17T17:14:50.652922+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.0,
+    "confidence": 0.88,
+    "video_name": "Sere_vid_converted.mp4"
+  },
+  {
+    "id": "1773768373.768526_IMG_8309.mov",
+    "timestamp": "2026-03-17T17:26:13.768635+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 1.0,
+    "video_name": "IMG_8309_converted.mp4"
+  },
+  {
+    "id": "1773769119.911283_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T17:38:39.911341+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773769809.047627_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T17:50:09.047686+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773770247.86158_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T17:57:27.861625+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773770725.879959_Sere_vid.mov",
+    "timestamp": "2026-03-17T18:05:25.879977+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.0,
+    "confidence": 0.88,
+    "video_name": "Sere_vid_converted.mp4"
+  },
+  {
+    "id": "1773771068.699385_IMG_8311.mov",
+    "timestamp": "2026-03-17T18:11:08.699619+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 6.5,
+    "confidence": 0.78,
+    "video_name": "IMG_8311_converted.mp4"
+  },
+  {
+    "id": "1773772050.216783_IMG_8309.mov",
+    "timestamp": "2026-03-17T18:27:30.216916+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 1.0,
+    "video_name": "IMG_8309_converted.mp4"
+  },
+  {
+    "id": "1773773097.985163_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T18:44:57.985220+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773773269.575288_Sere_vid.mov",
+    "timestamp": "2026-03-17T18:47:49.575317+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.0,
+    "confidence": 0.88,
+    "video_name": "Sere_vid_converted.mp4"
+  },
+  {
+    "id": "1773774285.218111_3x6 Squat 145kg @7.mp4",
+    "timestamp": "2026-03-17T19:04:45.218176+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 8.0,
+    "confidence": 0.96,
+    "video_name": "3x6 Squat 145kg @7.mp4"
+  },
+  {
+    "id": "1773775040.541876_Sere_vid.mov",
+    "timestamp": "2026-03-17T19:17:20.541910+00:00",
+    "lift_type": "Squat",
+    "predicted_rpe": 5.0,
+    "confidence": 0.88,
+    "video_name": "Sere_vid_converted.mp4"
   }
 ]

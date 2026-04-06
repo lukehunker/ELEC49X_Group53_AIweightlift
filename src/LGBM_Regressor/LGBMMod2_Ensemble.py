@@ -21,7 +21,7 @@ print(f"Training version: {VERSION}")
 # Expected: 0.03-0.05 MAE improvement
 # -----------------------------------------------------------
 
-file_path = "../Train_Outputs/Master_Results.xlsx"
+file_path = "Master_Results.xlsx"
 df = pd.read_excel(file_path)
 
 print(f"Loaded {len(df)} rows")

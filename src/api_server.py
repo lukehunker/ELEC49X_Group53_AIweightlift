@@ -234,7 +234,9 @@ async def health_check():
 async def predict_rpe(
     request: Request,
     video: UploadFile = File(...),
-    lift_type: str = Form(...)
+    lift_type: str = Form(...),
+    start_time: float = Form(None),
+    end_time: float = Form(None)
 ):
     """
     Predict RPE from uploaded workout video
@@ -289,14 +291,34 @@ async def predict_rpe(
         video_path = os.path.join(temp_dir, video.filename)
         with open(video_path, "wb") as f:
             shutil.copyfileobj(video.file, f)
-        
+
+        # Crop video if start_time and end_time are provided
+        cropped_path = video_path
+        if start_time is not None and end_time is not None and end_time > start_time:
+            import subprocess
+            cropped_path = os.path.join(temp_dir, f"cropped_{video.filename}")
+            ffmpeg_cmd = [
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-ss", str(start_time),
+                "-to", str(end_time),
+                "-c", "copy",
+                cropped_path
+            ]
+            try:
+                subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                print(f"Video cropped: {cropped_path} [{start_time}s to {end_time}s]")
+            except Exception as e:
+                print(f"Warning: Video cropping failed, using original video. Error: {e}")
+                cropped_path = video_path
+
         print(f"\n{'='*70}")
         print(f"Processing upload: {video.filename} ({lift_type})")
         print(f"{'='*70}")
-        
+
         # Run complete prediction pipeline with visualizations enabled
         result = PREDICTOR.predict(
-            video_path,
+            cropped_path,
             movement=lift_type,
             output_dir=temp_dir,
             save_visualizations=True

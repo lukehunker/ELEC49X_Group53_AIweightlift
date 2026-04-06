@@ -1,0 +1,10 @@
+Video: Squat 322
+Movement: Broom
+Rep pattern: TBT
+Detected reps: 3
+
+Rep 1: 2.60 seconds
+Rep 2: 0.90 seconds
+Rep 3: 2.70 seconds
+
+Fatigue (Last - First): 0.10s

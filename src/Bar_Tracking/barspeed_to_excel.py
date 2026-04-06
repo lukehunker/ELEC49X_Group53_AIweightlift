@@ -3,47 +3,44 @@ import re
 import cv2
 import numpy as np
 import traceback
+import pandas as pd
+import gc
 from datetime import datetime
 from mmpose.apis import MMPoseInferencer
-import pandas as pd
 
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
-VIDEOS_ROOT = "../../lifting_videos/Augmented/"
-MOVEMENT_FOLDERS = ["Bench Press", "Squat", "Deadlift"]
+VIDEOS_ROOT = "../lifting_videos/Augmented/"
+MOVEMENT_FOLDERS = ["Broom"]
 
 # Outputs
 OUTPUT_ROOT = "../Train_Outputs"
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
 # *** THE MASTER EXCEL FILE ***
-MASTER_EXCEL_PATH = os.path.join(OUTPUT_ROOT, "barSpeed.xlsx")
+MASTER_EXCEL_PATH = os.path.join(OUTPUT_ROOT, "barSpeed_broom.xlsx")
 
 print(f"[INFO] Videos root: {VIDEOS_ROOT}")
 print(f"[INFO] Output root: {OUTPUT_ROOT}")
 print(f"[INFO] Master Excel: {MASTER_EXCEL_PATH}")
 
-# Note: Pixels per CM is less critical for time, but kept for depth calcs
 PIXELS_PER_CM = 10.0
-
-import torch
 
 # ---------------------------------------------------------
 # MMPose inferencer
 # ---------------------------------------------------------
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
 inferencer = MMPoseInferencer(
     pose2d="body",
-    device=device
+    device="cpu"
 )
 
 LEFT_WRIST_IDX = 9
 RIGHT_WRIST_IDX = 10
 CONF_THR = 0.35
 
-# Wrist tracking knobs
-POSE_INIT_FRAMES = 12
+# Wrist tracking knobs (Optimized for pre-trimmed videos)
+POSE_INIT_FRAMES = 1
 POSE_RESEED_EVERY = 12
 MIN_GOOD_POINTS = 3
 MAX_RESEED_DIST_PX = 120
@@ -276,6 +273,8 @@ def detect_reps_state_machine_auto(
 
     # 1. Determine Movement Pattern
     valid = y[np.isfinite(y)]
+    if len(valid) == 0: return reps, "UNKNOWN", {"top_y": 0, "bottom_y": 0, "rom": 0}
+
     top_y = np.percentile(valid, 5)
     bottom_y = np.percentile(valid, 95)
     rom = bottom_y - top_y
@@ -287,47 +286,47 @@ def detect_reps_state_machine_auto(
 
     # 2. Find Candidate Bottoms (Local Peaks)
     from scipy.signal import find_peaks
-    # We look for peaks (bottoms) that are at least 60% into the total ROM
-    height_thresh = top_y + 0.60 * rom if pattern == "TBT" else None
-    if pattern == "BTB":  # Deadlift peaks are "highs" (min Y)
-        peaks, _ = find_peaks(-y, height=-(bottom_y - 0.60 * rom), distance=int(fps * min_rep_seconds))
+
+    # PROMINENCE: Ignores wobbles during grinds.
+    peak_prominence = 0.15 * rom
+
+    if pattern == "BTB":
+        peaks, _ = find_peaks(-y, height=-(bottom_y - 0.60 * rom), distance=int(fps * min_rep_seconds),
+                              prominence=peak_prominence)
     else:
-        peaks, _ = find_peaks(y, height=height_thresh, distance=int(fps * min_rep_seconds))
+        peaks, _ = find_peaks(y, height=top_y + 0.60 * rom, distance=int(fps * min_rep_seconds),
+                              prominence=peak_prominence)
 
     # 3. For each peak, find the true start and true end
-    for p in peaks:
-        # --- FIND START (Look Back) ---
-        # Look back up to 4 seconds. Find the last point where the bar was "Stationary"
-        # at the top before it started moving towards the peak.
-        search_start = max(0, p - int(4.0 * fps))
-        pre_snippet = y[search_start:p]
+    for i, p in enumerate(peaks):
+        # Fences to prevent bleed-over
+        search_start_limit = max(0, p - int(15.0 * fps)) if i == 0 else peaks[i - 1]
+        search_end_limit = min(len(y), p + int(15.0 * fps)) if i == len(peaks) - 1 else peaks[i + 1]
+
+        pre_snippet = y[search_start_limit:p]
+        post_snippet = y[p:search_end_limit]
+
+        if len(pre_snippet) == 0 or len(post_snippet) == 0: continue
 
         if pattern == "TBT":
-            # Start is the frame where Y was at its minimum (highest point)
-            # closest to the descent.
-            start_idx = search_start + np.argmin(pre_snippet)
-        else:
-            # Deadlift: Start is the frame where Y was maximum (on floor)
-            start_idx = search_start + np.argmax(pre_snippet)
+            start_idx = search_start_limit + np.argmin(pre_snippet)
 
-        # --- FIND END (Look Forward) ---
-        # Look forward up to 4 seconds. Find the first point where the bar returns
-        # to a stationary "Top" position.
-        search_end = min(len(y), p + int(4.0 * fps))
-        post_snippet = y[p:search_end]
+            # PLATEAU CATCHER: Cuts out hold times by finding first frame in lockout zone
+            abs_min = np.min(post_snippet)
+            lockout_thresh = abs_min + 0.03 * rom
+            end_idx = p + np.argmax(post_snippet <= lockout_thresh)
 
-        if pattern == "TBT":
-            # End is the frame where Y is at its minimum (lockout)
-            end_idx = p + np.argmin(post_snippet)
         else:
-            # Deadlift: End is the frame where Y is at its maximum (floor)
-            end_idx = p + np.argmax(post_snippet)
+            start_idx = search_start_limit + np.argmax(pre_snippet)
+
+            abs_max = np.max(post_snippet)
+            floor_thresh = abs_max - 0.03 * rom
+            end_idx = p + np.argmax(post_snippet >= floor_thresh)
 
         # --- VALIDATION ---
-        # Ensure the rep has enough movement and duration
-        duration = (end_idx - start_idx) / fps
-        if duration >= min_rep_seconds:
-            # Avoid duplicate or overlapping reps
+        duration = (end_idx - p) / fps if pattern == "TBT" else (p - start_idx) / fps
+
+        if duration >= min_rep_seconds / 2.0:
             if not reps or start_idx > reps[-1][2]:
                 reps.append((start_idx, p, end_idx))
 
@@ -335,35 +334,21 @@ def detect_reps_state_machine_auto(
     return reps, pattern, safe_thr
 
 
-# --- UPDATED FUNCTION FOR TIME DURATION ---
 def compute_rep_durations(y_smooth, fps, reps, pattern):
     """
-    Calculates the duration (seconds) of the Concentric (lifting) phase.
-    Returns a list of tuples: (duration_seconds, depth_pixels)
+    Calculates the duration (seconds) of the Concentric phase.
     """
     y = np.asarray(y_smooth, dtype=float)
     stats = []
 
     for triple in reps:
-        if pattern == "TBT":  # Squat/Bench (Top -> Bottom -> Top)
+        if pattern == "TBT":
             t1, b, t2 = triple
-
-            # DURATION CALCULATION:
-            # Concentric Only (Pushing up): (t2 - b) / fps
-            # Full Rep (Down + Up): (t2 - t1) / fps
-
-            # Using Concentric as it is best for fatigue tracking
             duration = (t2 - b) / fps
-
             depth_px = y[b] - min(y[t1], y[t2])
-        else:  # Deadlift (Bottom -> Top -> Bottom)
+        else:
             b1, t, b2 = triple
-
-            # DURATION CALCULATION:
-            # Concentric Only (Pulling up): (t - b1) / fps
-
             duration = (t - b1) / fps
-
             depth_px = max(y[b1], y[b2]) - y[t]
 
         stats.append((float(duration), float(depth_px)))
@@ -407,6 +392,7 @@ def process_video(video_path, movement_name, out_dir):
     old_gray = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
 
     base_name = os.path.splitext(os.path.basename(video_path))[0]
+
     vis_path = os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_vis.mp4")
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(vis_path, fourcc, fps, (width, height))
@@ -438,8 +424,14 @@ def process_video(video_path, movement_name, out_dir):
             ys.append(float(my))
             p0 = good.reshape(-1, 1, 2)
             lost_counter = 0
-            for gx, gy in good: cv2.circle(frame, (int(gx), int(gy)), 4, (0, 255, 255), -1)
-            cv2.circle(frame, (int(mx), int(my)), 6, (0, 0, 255), -1)
+
+        # Draw tracking overlay for visualization
+        vis_frame = frame.copy()
+        if good is not None and len(good) > 0:
+            for gx, gy in good:
+                cv2.circle(vis_frame, (int(gx), int(gy)), 4, (0, 255, 255), -1)
+            cv2.circle(vis_frame, (int(mx), int(my)), 6, (0, 0, 255), -1)
+        writer.write(vis_frame)
 
         do_reseed = (frame_idx % POSE_RESEED_EVERY == 0) or (lost_counter >= 2)
         if do_reseed and wrist_side != "plate":
@@ -457,64 +449,66 @@ def process_video(video_path, movement_name, out_dir):
                     xs.append(float(px))
 
         old_gray = frame_gray
-        writer.write(frame)
         frame_idx += 1
+
     cap.release()
     writer.release()
+    print(f"[SAVED] Bar speed overlay: {vis_path}")
 
     ys = np.array(ys, dtype=float)
     y_smooth = moving_average(ys, window=7)
     force = "BTB" if movement_name.lower() == "deadlift" else None
 
     reps, pattern, thr = detect_reps_state_machine_auto(y_smooth, fps, force_pattern=force)
-
-    # --- CHANGED TO DURATION CALCULATION ---
-    # stats is a list of tuples: (duration_seconds, depth_pixels)
     stats = compute_rep_durations(y_smooth, fps, reps, pattern)
 
     if len(stats) < len(reps): reps = reps[:len(stats)]
     if len(reps) < 1:
-        print(f"[WARN] No valid reps for {base_name}")
+        print(f"\n[WARN] No valid reps for {base_name}")
         return None
 
-    # Extract just the durations
     durations = [s[0] for s in stats]
 
     first_rep_duration = durations[0]
     last_rep_duration = durations[-1]
 
-    # FATIGUE: Last Rep Time - First Rep Time
-    # Positive result means you got SLOWER (Last rep took longer)
-    fatigue_seconds = last_rep_duration - first_rep_duration
+    # FLAG 1-REP MAX
+    is_one_rep_max = (len(durations) == 1)
 
-    txt_path = os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_barspeed.txt")
-    with open(txt_path, "w") as f:
-        f.write(f"Video: {base_name}\nMovement: {movement_name}\nRep pattern: {pattern}\n")
-        f.write(f"Detected reps: {len(reps)}\n\n")
-        for i, dur in enumerate(durations, 1):
-            f.write(f"Rep {i}: {dur:.2f} seconds\n")
-        f.write(f"\nFatigue (Last - First): {fatigue_seconds:.2f}s\n")
+    # REP CHANGE CALCULATION
+    if is_one_rep_max:
+        rep_change_seconds = first_rep_duration
+    else:
+        rep_change_seconds = last_rep_duration - first_rep_duration
 
-    np.save(os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_y.npy"), ys)
+    # txt_path = os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_barspeed.txt")
+    # with open(txt_path, "w") as f:
+    #     f.write(f"Video: {base_name}\nMovement: {movement_name}\nRep pattern: {pattern}\n")
+    #     f.write(f"Detected reps: {len(reps)}\n\n")
+    #     for i, dur in enumerate(durations, 1):
+    #         f.write(f"Rep {i}: {dur:.2f} seconds\n")
+    #     f.write(f"\nRep Change (Last - First): {rep_change_seconds:.2f}s\n")
+
+    # np.save(os.path.join(out_dir, f"{movement_name}__{base_name}__wrist_y.npy"), ys)
+
     print(
-        f"\n[OK] {movement_name} | {base_name}: reps={len(reps)}, first={first_rep_duration:.2f}s, last={last_rep_duration:.2f}s, fatigue={fatigue_seconds:.2f}s")
+        f"\n[OK] {movement_name} | {base_name}: reps={len(reps)}, first={first_rep_duration:.2f}s, last={last_rep_duration:.2f}s, rep_change={rep_change_seconds:.2f}s, 1RM={is_one_rep_max}")
 
     return {
         "video_name": os.path.basename(video_path),
         "rep_count": len(reps),
         "first_rep_duration_s": first_rep_duration,
         "last_rep_duration_s": last_rep_duration,
-        "fatigue_s": fatigue_seconds,
+        "rep_change_s": rep_change_seconds,
+        "1_rep_max": is_one_rep_max,
     }
 
 
 def runManual():
-    rows = []
     print("\n==========================================")
     print("    SINGLE VIDEO PROCESSING MODE")
     print("==========================================\n")
 
-    # 1. Ask for Movement
     print("Select Movement Folder:")
     for i, m in enumerate(MOVEMENT_FOLDERS):
         print(f"  {i + 1}. {m}")
@@ -530,11 +524,9 @@ def runManual():
         print("Invalid input.")
         exit()
 
-    # 2. Ask for Video Filename
     print(f"\nTarget Folder: {folder_name}")
     target_video = input(f"Enter exact video filename (e.g. '{folder_name} 11.mp4'): ").strip()
 
-    # Check if file exists
     folder_path, _ = find_movement_folder(VIDEOS_ROOT, folder_name)
     video_path = os.path.join(folder_path, target_video)
 
@@ -543,36 +535,27 @@ def runManual():
         print("Please check the name and try again.")
         exit()
 
-    # 3. Process
     print(f"\n[INFO] Processing: {target_video} ...")
 
-    # Use output folder for that movement (so text files land in right place)
-    movement_out = os.path.join(OUTPUT_ROOT, folder_name.replace(" ", "_"))  # Fixed Path
-    os.makedirs(movement_out, exist_ok=True)
+    movement_out = os.path.join(OUTPUT_ROOT, folder_name.replace(" ", "_"))
+    # os.makedirs(movement_out, exist_ok=True)
 
     try:
         feats = process_video(video_path, folder_name, movement_out)
 
         if feats:
-            # --- APPEND TO MASTER EXCEL ---
-            # Load existing master if it exists
             if os.path.exists(MASTER_EXCEL_PATH):
                 try:
                     master_df = pd.read_excel(MASTER_EXCEL_PATH)
-                    # Remove any previous entry for this exact video to prevent duplicates
                     master_df = master_df[master_df["video_name"] != feats["video_name"]]
                 except Exception:
                     master_df = pd.DataFrame()
             else:
                 master_df = pd.DataFrame()
 
-            # Create DataFrame for current row
             new_row_df = pd.DataFrame([feats])
-
-            # Concatenate
             final_df = pd.concat([master_df, new_row_df], ignore_index=True)
 
-            # Save back to Master
             try:
                 final_df.to_excel(MASTER_EXCEL_PATH, index=False)
                 print(f"\n[DONE] Added result to MASTER file: {MASTER_EXCEL_PATH}")
@@ -594,7 +577,6 @@ def run():
     print("      BATCH VIDEO PROCESSING MODE")
     print("==========================================\n")
 
-    # 1. Loop through each movement folder defined in CONFIG
     for movement_name in MOVEMENT_FOLDERS:
         folder_path = os.path.join(VIDEOS_ROOT, movement_name)
 
@@ -602,51 +584,37 @@ def run():
             print(f"[WARN] Folder not found: {folder_path} - Skipping...")
             continue
 
-        # 2. Find all video files in that folder
         all_files = os.listdir(folder_path)
-        # Filter for video extensions to avoid trying to process .txt or .DS_Store files
         video_files = [f for f in all_files if f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))]
-
-        # Sort them naturally (1, 2, ... 10) instead of alphabetically (1, 10, 2)
         video_files.sort(key=extract_number)
 
         print(f"\n------------------------------------------------")
         print(f" Folder: {movement_name} | Found {len(video_files)} videos")
         print(f"------------------------------------------------")
 
-        # Prepare the output directory for this movement
         movement_out = os.path.join(OUTPUT_ROOT, movement_name.replace(" ", "_"))
-        os.makedirs(movement_out, exist_ok=True)
+        # os.makedirs(movement_out, exist_ok=True)
 
-        # 3. Process each video in the list
         for i, video_file in enumerate(video_files):
             video_path = os.path.join(folder_path, video_file)
             print(f"\n[{i + 1}/{len(video_files)}] Processing: {video_file} ...")
 
             try:
-                # Run the processing logic
                 feats = process_video(video_path, movement_name, movement_out)
 
                 if feats:
-                    # --- SAFE EXCEL UPDATE ---
-                    # We load and save the Excel file every time.
-                    # This is slightly slower but ensures that if the script crashes
-                    # on video #50, you don't lose the data for the first 49.
                     if os.path.exists(MASTER_EXCEL_PATH):
                         try:
                             master_df = pd.read_excel(MASTER_EXCEL_PATH)
-                            # Remove any previous entry for this exact video to avoid duplicates
                             master_df = master_df[master_df["video_name"] != feats["video_name"]]
                         except Exception:
                             master_df = pd.DataFrame()
                     else:
                         master_df = pd.DataFrame()
 
-                    # Add the new result
                     new_row_df = pd.DataFrame([feats])
                     final_df = pd.concat([master_df, new_row_df], ignore_index=True)
 
-                    # Save back to disk
                     try:
                         final_df.to_excel(MASTER_EXCEL_PATH, index=False)
                         print(f"[SAVED] Master Excel updated successfully.")
@@ -660,14 +628,17 @@ def run():
                 print(f"[CRASH] Critical error processing {video_file}: {e}")
                 traceback.print_exc()
 
+            # FORCE CLEAR RAM AFTER EVERY VIDEO TO PREVENT CRASHES
+            gc.collect()
+
     print("\n==========================================")
     print("           BATCH PROCESSING COMPLETE      ")
     print("==========================================")
 
 
 # ---------------------------------------------------------
-# Main (Interactive Single Mode)
+# Main
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    runManual()
-    #run()
+    # runManual()
+    run()

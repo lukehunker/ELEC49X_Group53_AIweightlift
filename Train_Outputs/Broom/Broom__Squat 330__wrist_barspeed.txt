@@ -1,0 +1,9 @@
+Video: Squat 330
+Movement: Broom
+Rep pattern: TBT
+Detected reps: 2
+
+Rep 1: 2.07 seconds
+Rep 2: 0.57 seconds
+
+Fatigue (Last - First): -1.50s

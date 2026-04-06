@@ -1,0 +1,10 @@
+Video: Squat 319
+Movement: Broom
+Rep pattern: TBT
+Detected reps: 3
+
+Rep 1: 2.73 seconds
+Rep 2: 0.70 seconds
+Rep 3: 2.27 seconds
+
+Fatigue (Last - First): -0.47s
