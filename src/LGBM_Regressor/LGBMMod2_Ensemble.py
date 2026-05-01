@@ -119,7 +119,7 @@ print("\n" + "=" * 60)
 print("TRAINING ENSEMBLE: LGBM + XGBoost")
 print("=" * 60)
 
-# Best params from your previous run
+# LGBM hyperparameters
 lgbm_params = {
     'objective': 'regression',
     'metric': 'mae',
@@ -141,7 +141,7 @@ lgbm_params = {
     'n_jobs': -1
 }
 
-# XGBoost with similar hyperparameters
+# XGBoost hyperparameters
 xgb_params = {
     'objective': 'reg:absoluteerror',
     'n_estimators': 2600,
