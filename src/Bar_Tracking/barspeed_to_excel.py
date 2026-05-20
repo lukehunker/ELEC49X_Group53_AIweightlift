@@ -6,7 +6,6 @@ import traceback
 import pandas as pd
 import gc
 from datetime import datetime
-from mmpose.apis import MMPoseInferencer
 
 # ---------------------------------------------------------
 # CONFIG
@@ -28,12 +27,26 @@ print(f"[INFO] Master Excel: {MASTER_EXCEL_PATH}")
 PIXELS_PER_CM = 10.0
 
 # ---------------------------------------------------------
-# MMPose inferencer
+# MMPose inferencer (lazy loaded)
 # ---------------------------------------------------------
-inferencer = MMPoseInferencer(
-    pose2d="body",
-    device="cpu"
-)
+inferencer = None
+
+def _get_mmpose_inferencer():
+    """Lazy load MMPose inferencer on first use."""
+    global inferencer
+    if inferencer is None:
+        try:
+            from mmpose.apis import MMPoseInferencer
+            inferencer = MMPoseInferencer(
+                pose2d="body",
+                device="cpu"
+            )
+        except ImportError as e:
+            raise ImportError(
+                f"MMPose is required for bar speed tracking but failed to import: {e}\n"
+                "Install it with: pip install mmpose"
+            ) from e
+    return inferencer
 
 LEFT_WRIST_IDX = 9
 RIGHT_WRIST_IDX = 10
@@ -379,7 +392,7 @@ def process_video(video_path, movement_name, out_dir):
     cap_pose.release()
     if not pose_frames: return None
 
-    seed = choose_lifter_and_wrist_seed(pose_frames, width, height, inferencer, CONF_THR)
+    seed = choose_lifter_and_wrist_seed(pose_frames, width, height, _get_mmpose_inferencer(), CONF_THR)
     if seed is None:
         print(f"[ERROR] No seed for {os.path.basename(video_path)}")
         return None
@@ -435,7 +448,7 @@ def process_video(video_path, movement_name, out_dir):
 
         do_reseed = (frame_idx % POSE_RESEED_EVERY == 0) or (lost_counter >= 2)
         if do_reseed and wrist_side != "plate":
-            persons = run_pose_on_frame(frame, inferencer, CONF_THR)
+            persons = run_pose_on_frame(frame, _get_mmpose_inferencer(), CONF_THR)
             chosen_person, chosen_bbox = pick_person_by_bbox(persons, lifter_bbox)
             if chosen_bbox is not None: lifter_bbox = chosen_bbox
             pw = get_pose_wrist(chosen_person, wrist_side, CONF_THR)
