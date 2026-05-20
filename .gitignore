@@ -14,7 +14,7 @@ output/
 
 # Python virtual environment
 venv_weightlift/
-*.env/
+.env/
 
 # Python cache files
 __pycache__/
